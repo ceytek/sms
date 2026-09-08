@@ -111,6 +111,55 @@ SMS/
 cp .env.example .env
 ```
 
+## Yayınlama (VDS)
+
+Geliştirme bu makinede yapılır. `main` branch'e push edilince GitHub Actions SSH ile sunucuya bağlanır ve Docker Compose ile yayına alır.
+
+Akış:
+
+```text
+Yerel geliştirme
+   ↓
+git push origin main
+   ↓
+GitHub Actions
+   ↓
+SSH → VDS
+   ↓
+git pull + docker compose up
+```
+
+Sunucuda ilk kurulum (bir kez):
+
+```bash
+# sunucuda root olarak
+curl -fsSL https://raw.githubusercontent.com/ceytek/sms/main/scripts/server-setup.sh | bash
+```
+
+veya repoyu kopyaladıktan sonra:
+
+```bash
+bash /opt/sms/scripts/server-setup.sh
+```
+
+GitHub repository secrets:
+
+| Secret | Açıklama |
+|--------|----------|
+| `SSH_HOST` | Sunucu IP (ör. 185.92.2.38) |
+| `SSH_USER` | `root` |
+| `SSH_PRIVATE_KEY` | Deploy için özel SSH anahtarı |
+
+Sunucu ortam değişkenleri `.env.production.example` dosyasından `/opt/sms/.env` olarak oluşturulur.
+
+Yayın sonrası:
+
+| Servis | URL |
+|--------|-----|
+| Frontend | http://185.92.2.38 |
+| Backend API | http://185.92.2.38:3001 |
+| AI Service | http://185.92.2.38:8000 |
+
 ## Lisans
 
 Tüm hakları saklıdır.
