@@ -1,0 +1,137 @@
+services:
+  # ============================================
+  # Infrastructure
+  # ============================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sms_user
+      POSTGRES_PASSWORD: sms_password
+      POSTGRES_DB: sms_db
+    ports:
+      - '5434:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U sms_user -d sms_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: sms-redis
+    restart: unless-stopped
+    ports:
+      - '6380:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Application Services
+  # ============================================
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: sms-backend
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: sms_user
+      DATABASE_PASSWORD: sms_password
+      DATABASE_NAME: sms_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: docker-jwt-secret-change-in-production
+      JWT_EXPIRATION: 24h
+      AI_SERVICE_URL: http://ai-service:8000
+      PORT: 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend.Dockerfile
+    container_name: sms-frontend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+    depends_on:
+      - backend
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: ../docker/ai-service.Dockerfile
+    container_name: sms-ai-service
+    restart: unless-stopped
+    ports:
+      - '8000:8000'
+    environment:
+      APP_ENV: development
+      APP_PORT: 8000
+
+  # ============================================
+  # Ileride eklenecek servisler
+  # ============================================
+
+  # sms-worker:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: ../docker/worker.Dockerfile
+  #   container_name: sms-worker
+  #   restart: unless-stopped
+  #   environment:
+  #     DATABASE_HOST: postgres
+  #     REDIS_HOST: redis
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   deploy:
+  #     replicas: 2
+
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: sms-nginx
+  #   ports:
+  #     - '80:80'
+  #     - '443:443'
+  #   depends_on:
+  #     - frontend
+  #     - backend
+  #     - ai-service
+
+  # prometheus:
+  #   image: prom/prometheus
+  #   container_name: sms-prometheus
+  #   ports:
+  #     - '9090:9090'
+
+  # grafana:
+  #   image: grafana/grafana
+  #   container_name: sms-grafana
+  #   ports:
+  #     - '3002:3000'
+
+volumes:
+  postgres_data:
+  redis_data:
