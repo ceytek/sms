@@ -1,0 +1,806 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
+import { Company } from './entities/company.entity.js';
+import { CompanyContact } from './entities/company-contact.entity.js';
+import { CompanyNote } from './entities/company-note.entity.js';
+import { CompanySecuritySettings } from './entities/company-security-settings.entity.js';
+import { CompanyIpRule } from './entities/company-ip-rule.entity.js';
+import { CompanySmsAccount } from './entities/company-sms-account.entity.js';
+import { CompanyOriginator } from './entities/company-originator.entity.js';
+import { CompanyCreditAlert } from './entities/company-credit-alert.entity.js';
+import { CompanyService } from './entities/company-service.entity.js';
+import { CompanyIysSettings } from './entities/company-iys-settings.entity.js';
+import { CompanyPriceList } from './entities/company-price-list.entity.js';
+import { Wallet } from '../wallets/entities/wallet.entity.js';
+import { CreateCompanyDto } from './dto/create-company.dto.js';
+import { UpdateCompanyDto } from './dto/update-company.dto.js';
+import { CompanyQueryDto } from './dto/company-query.dto.js';
+import { CompanyStatus } from '../../common/enums/company-status.enum.js';
+import { WalletType } from '../../common/enums/wallet-type.enum.js';
+import { IpRuleType } from '../../common/enums/ip-rule-type.enum.js';
+import { IysStatus } from '../../common/enums/iys-status.enum.js';
+import { OriginatorStatus } from '../../common/enums/originator-status.enum.js';
+import { NotificationType } from '../../common/enums/notification-type.enum.js';
+import { CredentialType } from '../../common/enums/credential-type.enum.js';
+import { CredentialsService } from '../credentials/credentials.service.js';
+import { AuditService } from '../audit/audit.service.js';
+import { User } from '../auth/entities/user.entity.js';
+import { Role } from '../../common/enums/role.enum.js';
+import * as crypto from 'crypto';
+import * as bcrypt from 'bcrypt';
+
+const COMPANY_RELATIONS = [
+  'city',
+  'district',
+  'parentCompany',
+  'dealerCompany',
+  'contacts',
+  'notes',
+  'securitySettings',
+  'ipRules',
+  'smsAccounts',
+  'smsAccounts.provider',
+  'originators',
+  'creditAlerts',
+  'services',
+  'services.service',
+  'iysSettings',
+  'priceListAssignments',
+  'priceListAssignments.priceList',
+  'wallets',
+] as const;
+
+@Injectable()
+export class CompaniesService {
+  constructor(
+    @InjectRepository(Company)
+    private readonly companyRepository: Repository<Company>,
+    private readonly dataSource: DataSource,
+    private readonly credentialsService: CredentialsService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  async findAll(
+    query: CompanyQueryDto,
+    user?: { id: string; role: string; companyId: string },
+  ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const qb = this.companyRepository
+      .createQueryBuilder('company')
+      .where('company.deleted_at IS NULL');
+
+    if (user?.role === Role.DEALER) {
+      // Bayi: sadece kendi müşterilerini görür
+      qb.andWhere('company.dealer_company_id = :dealerCompanyId', {
+        dealerCompanyId: user.companyId,
+      });
+    } else if (user?.role === Role.ADMIN) {
+      // Admin: bayileri + kendi direkt müşterilerini görür (bayiye bağlı müşterileri görmez)
+      // company_code = 'ADMIN' olan platform kaydını da hariç tut
+      qb.andWhere(
+        '(company.is_dealer = true OR company.dealer_company_id IS NULL)',
+      );
+      qb.andWhere('company.company_code != :adminCode', {
+        adminCode: 'ADMIN',
+      });
+    }
+
+    if (query.isDealer !== undefined) {
+      qb.andWhere('company.is_dealer = :isDealer', {
+        isDealer: query.isDealer,
+      });
+    }
+
+    if (query.status) {
+      qb.andWhere('company.status = :status', { status: query.status });
+    }
+
+    if (query.search) {
+      qb.andWhere(
+        '(company.name ILIKE :search OR company.company_code ILIKE :search OR company.email ILIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+
+    qb.addOrderBy('company.created_at', 'DESC').skip(skip).take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    return {
+      items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findOne(id: string) {
+    const company = await this.companyRepository.findOne({
+      where: { id },
+      relations: [...COMPANY_RELATIONS],
+    });
+
+    if (!company) {
+      throw new NotFoundException('Firma bulunamadı');
+    }
+
+    return this.sanitizeCompany(company);
+  }
+
+  async create(
+    dto: CreateCompanyDto,
+    actor: { id: string; role: string; companyId: string },
+    ipAddress?: string,
+  ) {
+    if (actor.role === Role.DEALER && dto.isDealer === true) {
+      throw new ForbiddenException('Bayiler bayi oluşturamaz');
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const companyCode = await this.generateCompanyCode(manager, dto.isDealer ?? false);
+
+      const dealerCompanyId =
+        actor.role === Role.DEALER ? actor.companyId : dto.dealerCompanyId;
+
+      const company = manager.create(Company, {
+        companyCode,
+        name: dto.name,
+        companyType: dto.companyType,
+        isSubAccount: dto.isSubAccount ?? false,
+        isDealer: dto.isDealer ?? false,
+        parentCompanyId: dto.parentCompanyId,
+        dealerCompanyId,
+        taxOffice: dto.taxOffice,
+        taxNumber: dto.taxNumber,
+        nationalId: dto.nationalId,
+        birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
+        serialNumber: dto.serialNumber,
+        cityId: dto.cityId,
+        districtId: dto.districtId,
+        address: dto.address,
+        phone: dto.phone,
+        mobile: dto.mobile,
+        email: dto.email,
+        showAnnouncement: dto.showAnnouncement ?? true,
+        documentsCompleted: dto.documentsCompleted ?? false,
+        createdBy: actor.id,
+      });
+
+      const savedCompany = await manager.save(company);
+
+      if (dto.contacts?.length) {
+        const contacts = dto.contacts.map((contact) =>
+          manager.create(CompanyContact, {
+            ...contact,
+            companyId: savedCompany.id,
+            createdBy: actor.id,
+          }),
+        );
+        await manager.save(contacts);
+      }
+
+      if (dto.security) {
+        await this.saveSecuritySettings(
+          manager,
+          savedCompany.id,
+          dto.security,
+        );
+      }
+
+      const savedSmsAccounts = await this.saveSmsAccounts(
+        manager,
+        savedCompany.id,
+        dto.smsAccounts,
+      );
+
+      if (dto.originators?.length) {
+        await this.saveOriginators(
+          manager,
+          savedCompany.id,
+          dto.originators,
+          savedSmsAccounts,
+        );
+      }
+
+      if (dto.creditAlerts?.length) {
+        const alerts = dto.creditAlerts.map((alert, index) =>
+          manager.create(CompanyCreditAlert, {
+            companyId: savedCompany.id,
+            threshold: alert.threshold,
+            message: alert.message,
+            notificationType: alert.notificationType ?? NotificationType.EMAIL,
+            sortOrder: alert.sortOrder ?? index,
+            isActive: alert.isActive ?? true,
+          }),
+        );
+        await manager.save(alerts);
+      }
+
+      if (dto.services?.length) {
+        const services = dto.services.map((service) =>
+          manager.create(CompanyService, {
+            companyId: savedCompany.id,
+            serviceId: service.serviceId,
+            isActive: service.isActive ?? true,
+            startDate: service.startDate
+              ? new Date(service.startDate)
+              : undefined,
+            endDate: service.endDate ? new Date(service.endDate) : undefined,
+          }),
+        );
+        await manager.save(services);
+      }
+
+      if (dto.iys) {
+        await this.saveIysSettings(manager, savedCompany.id, dto.iys);
+      }
+
+      if (dto.notes?.length) {
+        const notes = dto.notes.map((note) =>
+          manager.create(CompanyNote, {
+            companyId: savedCompany.id,
+            note: note.note,
+            showOnOpen: note.showOnOpen ?? false,
+            createdBy: actor.id,
+          }),
+        );
+        await manager.save(notes);
+      }
+
+      if (dto.priceListId) {
+        const assignment = manager.create(CompanyPriceList, {
+          companyId: savedCompany.id,
+          priceListId: dto.priceListId,
+          assignedBy: actor.id,
+        });
+        await manager.save(assignment);
+      }
+
+      const wallets = [
+        manager.create(Wallet, {
+          companyId: savedCompany.id,
+          walletType: WalletType.SMS,
+          balance: 0,
+        }),
+        manager.create(Wallet, {
+          companyId: savedCompany.id,
+          walletType: WalletType.AI,
+          balance: 0,
+        }),
+      ];
+      await manager.save(wallets);
+
+      // Generate or use provided credentials
+      const generatedPassword = dto.accountPassword || crypto.randomBytes(4).toString('hex');
+      const passwordHash = await bcrypt.hash(generatedPassword, 10);
+      const userRole = dto.isDealer ? Role.DEALER : Role.CUSTOMER;
+      const accountUsername = dto.accountUsername || companyCode;
+
+      const newUser = manager.create(User, {
+        companyId: savedCompany.id,
+        companyCode: companyCode,
+        username: accountUsername,
+        passwordHash,
+        role: userRole,
+      });
+      await manager.save(newUser);
+
+      await this.auditService.log(
+        'CREATE',
+        'Company',
+        savedCompany.id,
+        actor.id,
+        savedCompany.id,
+        null,
+        { companyCode, name: dto.name },
+        ipAddress,
+        manager,
+      );
+
+      const result = await this.findOneInTransaction(manager, savedCompany.id);
+      return {
+        ...result,
+        generatedCredentials: {
+          companyCode,
+          username: accountUsername,
+          password: generatedPassword,
+          role: userRole,
+        },
+      };
+    });
+  }
+
+  async update(
+    id: string,
+    dto: UpdateCompanyDto,
+    actorUserId: string,
+    ipAddress?: string,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const company = await manager.findOne(Company, { where: { id } });
+      if (!company) {
+        throw new NotFoundException('Firma bulunamadı');
+      }
+
+      const oldValues = { ...company };
+
+      Object.assign(company, {
+        name: dto.name ?? company.name,
+        companyType: dto.companyType ?? company.companyType,
+        isSubAccount: dto.isSubAccount ?? company.isSubAccount,
+        isDealer: dto.isDealer ?? company.isDealer,
+        parentCompanyId: dto.parentCompanyId ?? company.parentCompanyId,
+        dealerCompanyId: dto.dealerCompanyId ?? company.dealerCompanyId,
+        taxOffice: dto.taxOffice ?? company.taxOffice,
+        taxNumber: dto.taxNumber ?? company.taxNumber,
+        nationalId: dto.nationalId ?? company.nationalId,
+        birthDate: dto.birthDate
+          ? new Date(dto.birthDate)
+          : company.birthDate,
+        serialNumber: dto.serialNumber ?? company.serialNumber,
+        cityId: dto.cityId ?? company.cityId,
+        districtId: dto.districtId ?? company.districtId,
+        address: dto.address ?? company.address,
+        phone: dto.phone ?? company.phone,
+        mobile: dto.mobile ?? company.mobile,
+        email: dto.email ?? company.email,
+        showAnnouncement: dto.showAnnouncement ?? company.showAnnouncement,
+        documentsCompleted:
+          dto.documentsCompleted ?? company.documentsCompleted,
+        updatedBy: actorUserId,
+      });
+
+      await manager.save(company);
+
+      if (dto.contacts !== undefined) {
+        await manager.delete(CompanyContact, { companyId: id });
+        if (dto.contacts.length) {
+          const contacts = dto.contacts.map((contact) =>
+            manager.create(CompanyContact, {
+              ...contact,
+              companyId: id,
+              createdBy: actorUserId,
+            }),
+          );
+          await manager.save(contacts);
+        }
+      }
+
+      if (dto.security !== undefined) {
+        await manager.delete(CompanyIpRule, { companyId: id });
+        await manager.delete(CompanySecuritySettings, { companyId: id });
+        if (dto.security) {
+          await this.saveSecuritySettings(manager, id, dto.security);
+        }
+      }
+
+      let savedSmsAccounts: CompanySmsAccount[] = [];
+      if (dto.smsAccounts !== undefined) {
+        const existingAccounts = await manager.find(CompanySmsAccount, {
+          where: { companyId: id },
+        });
+        for (const account of existingAccounts) {
+          await this.credentialsService.delete(
+            id,
+            CredentialType.SMS_PASSWORD,
+            'CompanySmsAccount',
+            account.id,
+            manager,
+          );
+        }
+        await manager.delete(CompanyOriginator, { companyId: id });
+        await manager.delete(CompanySmsAccount, { companyId: id });
+        savedSmsAccounts = await this.saveSmsAccounts(
+          manager,
+          id,
+          dto.smsAccounts,
+        );
+      }
+
+      if (dto.originators !== undefined) {
+        if (dto.smsAccounts === undefined) {
+          savedSmsAccounts = await manager.find(CompanySmsAccount, {
+            where: { companyId: id },
+          });
+        }
+        await manager.delete(CompanyOriginator, { companyId: id });
+        if (dto.originators.length) {
+          await this.saveOriginators(
+            manager,
+            id,
+            dto.originators,
+            savedSmsAccounts,
+          );
+        }
+      }
+
+      if (dto.creditAlerts !== undefined) {
+        await manager.delete(CompanyCreditAlert, { companyId: id });
+        if (dto.creditAlerts.length) {
+          const alerts = dto.creditAlerts.map((alert, index) =>
+            manager.create(CompanyCreditAlert, {
+              companyId: id,
+              threshold: alert.threshold,
+              message: alert.message,
+              notificationType:
+                alert.notificationType ?? NotificationType.EMAIL,
+              sortOrder: alert.sortOrder ?? index,
+              isActive: alert.isActive ?? true,
+            }),
+          );
+          await manager.save(alerts);
+        }
+      }
+
+      if (dto.services !== undefined) {
+        await manager.delete(CompanyService, { companyId: id });
+        if (dto.services.length) {
+          const services = dto.services.map((service) =>
+            manager.create(CompanyService, {
+              companyId: id,
+              serviceId: service.serviceId,
+              isActive: service.isActive ?? true,
+              startDate: service.startDate
+                ? new Date(service.startDate)
+                : undefined,
+              endDate: service.endDate
+                ? new Date(service.endDate)
+                : undefined,
+            }),
+          );
+          await manager.save(services);
+        }
+      }
+
+      if (dto.iys !== undefined) {
+        const existingIys = await manager.findOne(CompanyIysSettings, {
+          where: { companyId: id },
+        });
+        if (existingIys) {
+          await this.credentialsService.delete(
+            id,
+            CredentialType.IYS_API_KEY,
+            'CompanyIysSettings',
+            existingIys.id,
+            manager,
+          );
+        }
+        await manager.delete(CompanyIysSettings, { companyId: id });
+        if (dto.iys) {
+          await this.saveIysSettings(manager, id, dto.iys);
+        }
+      }
+
+      if (dto.notes !== undefined) {
+        await manager.softDelete(CompanyNote, { companyId: id });
+        if (dto.notes.length) {
+          const notes = dto.notes.map((note) =>
+            manager.create(CompanyNote, {
+              companyId: id,
+              note: note.note,
+              showOnOpen: note.showOnOpen ?? false,
+              createdBy: actorUserId,
+            }),
+          );
+          await manager.save(notes);
+        }
+      }
+
+      if (dto.priceListId !== undefined) {
+        await manager.delete(CompanyPriceList, { companyId: id });
+        if (dto.priceListId) {
+          const assignment = manager.create(CompanyPriceList, {
+            companyId: id,
+            priceListId: dto.priceListId,
+            assignedBy: actorUserId,
+          });
+          await manager.save(assignment);
+        }
+      }
+
+      await this.auditService.log(
+        'UPDATE',
+        'Company',
+        id,
+        actorUserId,
+        id,
+        oldValues as unknown as Record<string, unknown>,
+        dto as unknown as Record<string, unknown>,
+        ipAddress,
+        manager,
+      );
+
+      return this.findOneInTransaction(manager, id);
+    });
+  }
+
+  async updateStatus(
+    id: string,
+    status: CompanyStatus,
+    actorUserId: string,
+    ipAddress?: string,
+  ) {
+    const company = await this.companyRepository.findOne({ where: { id } });
+    if (!company) {
+      throw new NotFoundException('Firma bulunamadı');
+    }
+
+    if (status !== CompanyStatus.ACTIVE && status !== CompanyStatus.PASSIVE) {
+      throw new BadRequestException(
+        'Durum yalnızca ACTIVE veya PASSIVE olarak ayarlanabilir',
+      );
+    }
+
+    const oldStatus = company.status;
+    company.status = status;
+    company.updatedBy = actorUserId;
+    await this.companyRepository.save(company);
+
+    await this.auditService.log(
+      'STATUS_CHANGE',
+      'Company',
+      id,
+      actorUserId,
+      id,
+      { status: oldStatus },
+      { status },
+      ipAddress,
+    );
+
+    return this.findOne(id);
+  }
+
+  async findCompanyUsers(companyId: string) {
+    const users = await this.dataSource.getRepository(User).find({
+      where: { companyId },
+      order: { createdAt: 'DESC' },
+    });
+    return users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      role: u.role,
+      isActive: u.isActive,
+      createdAt: u.createdAt,
+    }));
+  }
+
+  async createCompanyUser(companyId: string, username: string, password: string) {
+    const company = await this.companyRepository.findOne({ where: { id: companyId } });
+    if (!company) {
+      throw new NotFoundException('Firma bulunamadı');
+    }
+
+    const existingUser = await this.dataSource.getRepository(User).findOne({
+      where: { companyCode: company.companyCode, username },
+    });
+    if (existingUser) {
+      throw new ForbiddenException('Bu kullanıcı adı zaten mevcut');
+    }
+
+    const role = company.isDealer ? Role.DEALER : Role.CUSTOMER;
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const user = this.dataSource.getRepository(User).create({
+      companyId,
+      companyCode: company.companyCode,
+      username,
+      passwordHash,
+      role,
+      isActive: true,
+    });
+
+    const saved = await this.dataSource.getRepository(User).save(user);
+    return {
+      id: saved.id,
+      username: saved.username,
+      role: saved.role,
+      companyCode: company.companyCode,
+      isActive: saved.isActive,
+      createdAt: saved.createdAt,
+    };
+  }
+
+  async resetUserPassword(companyId: string, userId: string, newPassword: string) {
+    const user = await this.dataSource.getRepository(User).findOne({
+      where: { id: userId, companyId },
+    });
+    if (!user) {
+      throw new NotFoundException('Kullanıcı bulunamadı');
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.dataSource.getRepository(User).save(user);
+
+    return { message: 'Şifre başarıyla güncellendi' };
+  }
+
+  private async generateCompanyCode(manager: EntityManager, isDealer: boolean): Promise<string> {
+    const prefix = isDealer ? 'B' : 'F';
+    const result = await manager
+      .createQueryBuilder(Company, 'company')
+      .select(
+        `MAX(CAST(SUBSTRING(company.company_code FROM 2) AS INTEGER))`,
+        'maxCode',
+      )
+      .where(`company.company_code LIKE :prefix`, { prefix: `${prefix}%` })
+      .andWhere(`LENGTH(company.company_code) = 6`)
+      .getRawOne<{ maxCode: string | null }>();
+
+    const maxCode = result?.maxCode ? parseInt(result.maxCode, 10) : 0;
+    return prefix + String(maxCode + 1).padStart(5, '0');
+  }
+
+  private async saveSecuritySettings(
+    manager: EntityManager,
+    companyId: string,
+    security: NonNullable<CreateCompanyDto['security']>,
+  ) {
+    const settings = manager.create(CompanySecuritySettings, {
+      companyId,
+      ipRuleType: security.ipRuleType ?? IpRuleType.NO_CONTROL,
+    });
+    const savedSettings = await manager.save(settings);
+
+    if (security.filePassword) {
+      await this.credentialsService.store(
+        companyId,
+        CredentialType.FILE_PASSWORD,
+        'CompanySecuritySettings',
+        savedSettings.id,
+        security.filePassword,
+        manager,
+      );
+    }
+
+    if (security.ipRules?.length) {
+      const rules = security.ipRules.map((rule) =>
+        manager.create(CompanyIpRule, {
+          companyId,
+          ipAddress: rule.ipAddress,
+          description: rule.description,
+          isActive: rule.isActive ?? true,
+        }),
+      );
+      await manager.save(rules);
+    }
+  }
+
+  private async saveSmsAccounts(
+    manager: EntityManager,
+    companyId: string,
+    smsAccounts?: CreateCompanyDto['smsAccounts'],
+  ): Promise<CompanySmsAccount[]> {
+    if (!smsAccounts?.length) {
+      return [];
+    }
+
+    const saved: CompanySmsAccount[] = [];
+    for (const account of smsAccounts) {
+      const { password, ...accountData } = account;
+      const smsAccount = manager.create(CompanySmsAccount, {
+        ...accountData,
+        companyId,
+      });
+      const savedAccount = await manager.save(smsAccount);
+      saved.push(savedAccount);
+
+      if (password) {
+        await this.credentialsService.store(
+          companyId,
+          CredentialType.SMS_PASSWORD,
+          'CompanySmsAccount',
+          savedAccount.id,
+          password,
+          manager,
+        );
+      }
+    }
+    return saved;
+  }
+
+  private async saveOriginators(
+    manager: EntityManager,
+    companyId: string,
+    originators: NonNullable<CreateCompanyDto['originators']>,
+    smsAccounts: CompanySmsAccount[],
+  ) {
+    const entities = originators.map((originator) => {
+      let smsAccountId = originator.smsAccountId;
+      if (
+        originator.smsAccountIndex !== undefined &&
+        smsAccounts[originator.smsAccountIndex]
+      ) {
+        smsAccountId = smsAccounts[originator.smsAccountIndex].id;
+      }
+
+      return manager.create(CompanyOriginator, {
+        companyId,
+        name: originator.name,
+        smsAccountId,
+        status: originator.status ?? OriginatorStatus.PENDING,
+        providerReference: originator.providerReference,
+      });
+    });
+    await manager.save(entities);
+  }
+
+  private async saveIysSettings(
+    manager: EntityManager,
+    companyId: string,
+    iys: NonNullable<CreateCompanyDto['iys']>,
+  ) {
+    const { apiKey, ...iysData } = iys;
+    const settings = manager.create(CompanyIysSettings, {
+      ...iysData,
+      companyId,
+      status: iys.status ?? IysStatus.PASSIVE,
+    });
+    const savedSettings = await manager.save(settings);
+
+    if (apiKey) {
+      await this.credentialsService.store(
+        companyId,
+        CredentialType.IYS_API_KEY,
+        'CompanyIysSettings',
+        savedSettings.id,
+        apiKey,
+        manager,
+      );
+    }
+  }
+
+  private async findOneInTransaction(manager: EntityManager, id: string) {
+    const company = await manager.findOne(Company, {
+      where: { id },
+      relations: [...COMPANY_RELATIONS],
+    });
+
+    if (!company) {
+      throw new NotFoundException('Firma bulunamadı');
+    }
+
+    return this.sanitizeCompany(company);
+  }
+
+  private sanitizeCompany(company: Company) {
+    const c = company as any;
+
+    const priceAssignment = c.priceListAssignments?.[0];
+    const wallets: any[] = c.wallets ?? [];
+    const smsWallet = wallets.find((w: any) => w.walletType === WalletType.SMS);
+    const aiWallet = wallets.find((w: any) => w.walletType === WalletType.AI);
+
+    return {
+      ...company,
+      priceListId: priceAssignment?.priceListId ?? null,
+      priceListName: priceAssignment?.priceList?.name ?? null,
+      smsBalance: Number(smsWallet?.balance ?? 0),
+      aiBalance: Number(aiWallet?.balance ?? 0),
+      services: c.services?.map((s: any) => ({
+        serviceId: s.serviceId,
+        serviceName: s.service?.name ?? s.serviceId,
+        isActive: s.isActive,
+        startDate: s.startDate,
+        endDate: s.endDate,
+      })),
+      securitySettings: company.securitySettings?.map((settings) => ({
+        ...settings,
+        filePasswordEncrypted: settings.filePasswordEncrypted
+          ? '[REDACTED]'
+          : undefined,
+      })),
+    };
+  }
+}

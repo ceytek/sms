@@ -10,5 +10,7 @@ git fetch origin main
 git reset --hard origin/main
 chmod +x scripts/deploy.sh
 
+docker compose -f "$COMPOSE_FILE" --env-file .env up -d --build postgres redis
+docker compose -f "$COMPOSE_FILE" --env-file .env run --rm backend npm run migration:run
 docker compose -f "$COMPOSE_FILE" --env-file .env up -d --build
 docker image prune -f

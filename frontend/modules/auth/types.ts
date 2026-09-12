@@ -1,8 +1,9 @@
 export interface User {
   id: string;
+  companyId?: string;
   companyCode: string;
   username: string;
-  role: "ADMIN" | "CUSTOMER";
+  role: "ADMIN" | "DEALER" | "CUSTOMER";
 }
 
 export interface LoginRequest {

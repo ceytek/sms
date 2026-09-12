@@ -1,0 +1,5 @@
+export enum IysStatus {
+  PASSIVE = 'PASSIVE',
+  ACTIVE = 'ACTIVE',
+  SYNC_CHANGES_ONLY = 'SYNC_CHANGES_ONLY',
+}

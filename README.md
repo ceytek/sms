@@ -55,10 +55,13 @@ docker compose up -d postgres redis
 cd backend
 cp .env.example .env
 npm install
+npm run migration:run   # ilk kurulumda şema + seed verileri
 npm run start:dev
 ```
 
 Backend http://localhost:3001 adresinde çalışacaktır.
+
+> **Not:** `synchronize` kapalıdır; şema değişiklikleri TypeORM migration ile yönetilir.
 
 ### 3. Frontend
 
@@ -88,6 +91,20 @@ AI Service http://localhost:8000 adresinde çalışacaktır.
 |-----|-----------|----------------|--------|
 | Müşteri | TEST001 | musteri | 123456 |
 | Admin | ADMIN | admin | admin123 |
+
+## Admin Paneli (Faz 2 — Firma Yönetimi)
+
+Admin olarak giriş yaptıktan sonra:
+
+| Sayfa | URL |
+|-------|-----|
+| Firma listesi | `/admin/companies` |
+| Yeni firma (6 adımlı sihirbaz) | `/admin/companies/new` |
+| Firma detayı | `/admin/companies/[id]` |
+| Fiyat listesi yönetimi | `/admin/pricing` |
+| Firmaya fiyat atama | `/admin/pricing/assign` |
+
+Yeni firmalar otomatik sayısal firma kodu alır (ör. `000001`). Mevcut test kullanıcıları (`TEST001`, `ADMIN`) geriye dönük uyumluluk için korunur.
 
 ## Proje Yapısı
 
@@ -126,7 +143,7 @@ GitHub Actions
    ↓
 SSH → VDS
    ↓
-git pull + docker compose up
+git pull + migration:run + docker compose up
 ```
 
 Sunucuda ilk kurulum (bir kez):

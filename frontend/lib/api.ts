@@ -1,3 +1,5 @@
+import { getAccessToken } from "@/lib/session";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface RequestOptions {
@@ -9,7 +11,7 @@ interface RequestOptions {
 export async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', headers = {}, body } = options;
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+  const token = getAccessToken();
 
   const config: RequestInit = {
     method,

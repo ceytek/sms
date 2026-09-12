@@ -39,7 +39,7 @@ export function LoginForm() {
         password,
       });
 
-      if (response.user.role === "ADMIN") {
+      if (response.user.role === "ADMIN" || response.user.role === "DEALER") {
         router.push("/admin");
       } else {
         router.push("/customer");

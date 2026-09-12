@@ -1,0 +1,6 @@
+export enum ContactType {
+  MANAGER = 'MANAGER',
+  TECHNICAL = 'TECHNICAL',
+  ACCOUNTING = 'ACCOUNTING',
+  PERSONNEL = 'PERSONNEL',
+}

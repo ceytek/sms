@@ -1,4 +1,17 @@
 import { apiRequest } from "@/lib/api";
+import {
+  applyImpersonationSession,
+  clearImpersonationSession,
+  clearPrimarySession,
+  closeImpersonationTab,
+  consumeImpersonationHandoff,
+  createImpersonationHandoff,
+  getAccessToken,
+  getOriginalUser,
+  getSessionUser,
+  isImpersonating,
+  setPrimarySession,
+} from "@/lib/session";
 import { LoginRequest, LoginResponse, User } from "../types";
 
 export const authService = {
@@ -9,36 +22,70 @@ export const authService = {
     });
 
     if (typeof window !== "undefined") {
-      localStorage.setItem("accessToken", response.accessToken);
-      localStorage.setItem("user", JSON.stringify(response.user));
+      setPrimarySession(response.accessToken, response.user);
     }
 
     return response;
   },
 
   logout(): void {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("user");
+    if (typeof window === "undefined") return;
+
+    if (isImpersonating()) {
+      closeImpersonationTab();
+      return;
     }
+
+    clearImpersonationSession();
+    clearPrimarySession();
   },
 
   getToken(): string | null {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("accessToken");
-    }
-    return null;
+    return getAccessToken();
   },
 
   getUser(): User | null {
-    if (typeof window !== "undefined") {
-      const user = localStorage.getItem("user");
-      return user ? JSON.parse(user) : null;
-    }
-    return null;
+    return getSessionUser() as User | null;
   },
 
   isAuthenticated(): boolean {
     return !!this.getToken();
+  },
+
+  async impersonate(companyId: string): Promise<LoginResponse> {
+    return apiRequest<LoginResponse>(`auth/impersonate/${companyId}`, {
+      method: "POST",
+    });
+  },
+
+  openImpersonationTab(response: LoginResponse, tab: Window) {
+    const key = createImpersonationHandoff(
+      response.accessToken,
+      response.user,
+      getSessionUser(),
+    );
+    tab.location.href = `/impersonate?k=${key}`;
+  },
+
+  completeImpersonationHandoff(key: string): LoginResponse | null {
+    const handoff = consumeImpersonationHandoff(key);
+    if (!handoff) return null;
+    applyImpersonationSession(handoff);
+    return {
+      accessToken: handoff.accessToken,
+      user: handoff.user as User,
+    };
+  },
+
+  exitImpersonation(): void {
+    closeImpersonationTab();
+  },
+
+  isImpersonating(): boolean {
+    return isImpersonating();
+  },
+
+  getOriginalUser(): User | null {
+    return getOriginalUser() as User | null;
   },
 };
