@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft,
   Building2,
@@ -25,6 +26,8 @@ import {
   Settings,
   Globe,
   Send,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import {
@@ -32,9 +35,15 @@ import {
   COMPANY_TYPE_LABELS,
   COMPANY_STATUS_LABELS,
   CONTACT_TYPE_LABELS,
+  CUSTOMER_TYPE_LABELS,
   NOTIFICATION_TYPE_LABELS,
   ORIGINATOR_STATUS_LABELS,
+  type ContactType,
 } from "../types";
+import { ClassificationFields } from "./classification-fields";
+import { companyService } from "../services/company.service";
+import { referenceService, type City, type District, type Service } from "../services/reference.service";
+import { PRICE_LIST_TYPE_LABELS, pricingService, type PriceList, type PriceListItem } from "@/modules/pricing";
 
 interface CompanyUser {
   id: string;
@@ -65,7 +74,8 @@ function StatusDot({ active }: { active: boolean }) {
   );
 }
 
-export function CompanyDetailView({ company }: CompanyDetailViewProps) {
+export function CompanyDetailView({ company: initialCompany }: CompanyDetailViewProps) {
+  const [company, setCompany] = useState(initialCompany);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [users, setUsers] = useState<CompanyUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -181,10 +191,16 @@ export function CompanyDetailView({ company }: CompanyDetailViewProps) {
 
         {/* Content Area */}
         <div className="flex-1 min-w-0">
-          {activeTab === "overview" && <OverviewTab company={company} />}
-          {activeTab === "contact" && <ContactTab company={company} />}
+          {activeTab === "overview" && (
+            <OverviewTab company={company} onUpdated={setCompany} />
+          )}
+          {activeTab === "contact" && (
+            <ContactTab company={company} onUpdated={setCompany} />
+          )}
           {activeTab === "sms" && <SmsTab company={company} />}
-          {activeTab === "services" && <ServicesTab company={company} />}
+          {activeTab === "services" && (
+            <ServicesTab company={company} onUpdated={setCompany} />
+          )}
           {activeTab === "users" && (
             <UsersTab
               companyId={company.id}
@@ -194,7 +210,9 @@ export function CompanyDetailView({ company }: CompanyDetailViewProps) {
               onReload={loadUsers}
             />
           )}
-          {activeTab === "pricing" && <PricingTab company={company} />}
+          {activeTab === "pricing" && (
+            <PricingTab company={company} onUpdated={setCompany} />
+          )}
         </div>
       </div>
     </div>
@@ -267,13 +285,103 @@ function InfoRow({ label, value }: { label: string; value?: string | number | bo
 
 /* ──────────────────────────── Overview Tab ──────────────────────────── */
 
-function OverviewTab({ company }: { company: CompanyDetail }) {
+function OverviewTab({
+  company,
+  onUpdated,
+}: {
+  company: CompanyDetail;
+  onUpdated: (company: CompanyDetail) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    customerType: company.customerType ?? ("" as const),
+    categoryId: company.categoryId ?? "",
+    subcategoryId: company.subcategoryId ?? "",
+  });
+
+  useEffect(() => {
+    setForm({
+      customerType: company.customerType ?? "",
+      categoryId: company.categoryId ?? "",
+      subcategoryId: company.subcategoryId ?? "",
+    });
+  }, [company.id, company.customerType, company.categoryId, company.subcategoryId]);
+
+  const save = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await companyService.update(company.id, {
+        customerType: form.customerType || null,
+        categoryId: form.categoryId || null,
+        subcategoryId: form.subcategoryId || null,
+      });
+      onUpdated(updated);
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Kayıt güncellenemedi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <Section title="Firma Bilgileri">
+      <Section
+        title="Firma Bilgileri"
+        action={
+          editing ? (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditing(false)} disabled={saving}>
+                Vazgeç
+              </Button>
+              <Button size="sm" onClick={() => void save()} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Kaydet"}
+              </Button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+              Düzenle
+            </Button>
+          )
+        }
+      >
+        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
         <dl>
           <InfoRow label="Hesap Türü" value={company.isDealer ? "Bayi" : "Müşteri"} />
           <InfoRow label="Firma Tipi" value={COMPANY_TYPE_LABELS[company.companyType]} />
+          {!editing && (
+            <>
+              <InfoRow
+                label="Müşteri Tipi"
+                value={company.customerType ? CUSTOMER_TYPE_LABELS[company.customerType] : "—"}
+              />
+              <InfoRow label="Ana Kategori" value={company.categoryName || "—"} />
+              <InfoRow label="Alt Kategori" value={company.subcategoryName || "—"} />
+            </>
+          )}
+        </dl>
+        {editing && (
+          <div className="my-3 border-y border-slate-100 py-4">
+            <ClassificationFields
+              value={form}
+              onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+              currentCategory={
+                company.categoryId && company.categoryName
+                  ? { id: company.categoryId, name: company.categoryName }
+                  : null
+              }
+              currentSubcategory={
+                company.subcategoryId && company.subcategoryName
+                  ? { id: company.subcategoryId, name: company.subcategoryName }
+                  : null
+              }
+            />
+          </div>
+        )}
+        <dl>
           <InfoRow label="Vergi Dairesi" value={company.taxOffice} />
           <InfoRow label="Vergi No" value={company.taxNumber} />
           <InfoRow label="TC Kimlik No" value={company.nationalId} />
@@ -289,51 +397,396 @@ function OverviewTab({ company }: { company: CompanyDetail }) {
 
 /* ──────────────────────────── Contact Tab ──────────────────────────── */
 
-function ContactTab({ company }: { company: CompanyDetail }) {
+const selectClass =
+  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+
+function ContactTab({
+  company,
+  onUpdated,
+}: {
+  company: CompanyDetail;
+  onUpdated: (company: CompanyDetail) => void;
+}) {
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [cities, setCities] = useState<City[]>([]);
+  const [districts, setDistricts] = useState<District[]>([]);
+  const [addressForm, setAddressForm] = useState({
+    cityId: company.cityId ? String(company.cityId) : "",
+    districtId: company.districtId ? String(company.districtId) : "",
+    address: company.address ?? "",
+    phone: company.phone ?? "",
+    mobile: company.mobile ?? "",
+    email: company.email ?? "",
+  });
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressError, setAddressError] = useState("");
+
+  const [addingContact, setAddingContact] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    name: "",
+    contactType: "MANAGER" as ContactType,
+    phone: "",
+    mobile: "",
+    email: "",
+  });
+  const [savingContact, setSavingContact] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [contactError, setContactError] = useState("");
+
+  useEffect(() => {
+    setAddressForm({
+      cityId: company.cityId ? String(company.cityId) : "",
+      districtId: company.districtId ? String(company.districtId) : "",
+      address: company.address ?? "",
+      phone: company.phone ?? "",
+      mobile: company.mobile ?? "",
+      email: company.email ?? "",
+    });
+  }, [company.id, company.cityId, company.districtId, company.address, company.phone, company.mobile, company.email]);
+
+  useEffect(() => {
+    referenceService
+      .getCities()
+      .then(setCities)
+      .catch(() => setCities([]));
+  }, []);
+
+  useEffect(() => {
+    if (!addressForm.cityId) {
+      setDistricts([]);
+      return;
+    }
+    referenceService
+      .getDistricts(Number(addressForm.cityId))
+      .then(setDistricts)
+      .catch(() => setDistricts([]));
+  }, [addressForm.cityId]);
+
+  const saveAddress = async () => {
+    setSavingAddress(true);
+    setAddressError("");
+    try {
+      const updated = await companyService.update(company.id, {
+        cityId: addressForm.cityId ? Number(addressForm.cityId) : null,
+        districtId: addressForm.districtId ? Number(addressForm.districtId) : null,
+        address: addressForm.address.trim(),
+        phone: addressForm.phone.trim(),
+        mobile: addressForm.mobile.trim(),
+        email: addressForm.email.trim(),
+      });
+      onUpdated(updated);
+      setEditingAddress(false);
+    } catch (err) {
+      setAddressError(err instanceof Error ? err.message : "Adres güncellenemedi");
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
+  const addContact = async () => {
+    if (!contactForm.name.trim()) {
+      setContactError("Ad soyad girin");
+      return;
+    }
+    setSavingContact(true);
+    setContactError("");
+    try {
+      const updated = await companyService.addContact(company.id, {
+        name: contactForm.name.trim(),
+        contactType: contactForm.contactType,
+        phone: contactForm.phone.trim() || undefined,
+        mobile: contactForm.mobile.trim() || undefined,
+        email: contactForm.email.trim() || undefined,
+      });
+      onUpdated(updated);
+      setContactForm({ name: "", contactType: "MANAGER", phone: "", mobile: "", email: "" });
+      setAddingContact(false);
+    } catch (err) {
+      setContactError(err instanceof Error ? err.message : "Kişi eklenemedi");
+    } finally {
+      setSavingContact(false);
+    }
+  };
+
+  const removeContact = async (contactId: string) => {
+    if (!window.confirm("Bu iletişim kişisini silmek istiyor musunuz?")) return;
+    setDeletingId(contactId);
+    setContactError("");
+    try {
+      const updated = await companyService.removeContact(company.id, contactId);
+      onUpdated(updated);
+    } catch (err) {
+      setContactError(err instanceof Error ? err.message : "Kişi silinemedi");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <Section title="Adres & İletişim">
-        <dl>
-          <InfoRow label="İl" value={company.cityName} />
-          <InfoRow label="İlçe" value={company.districtName} />
-          <InfoRow label="Adres" value={company.address} />
-          <InfoRow label="Telefon" value={company.phone} />
-          <InfoRow label="Cep" value={company.mobile} />
-          <InfoRow label="E-posta" value={company.email} />
-        </dl>
+      <Section
+        title="Adres & İletişim"
+        action={
+          editingAddress ? (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={savingAddress}
+                onClick={() => {
+                  setEditingAddress(false);
+                  setAddressError("");
+                }}
+              >
+                Vazgeç
+              </Button>
+              <Button size="sm" disabled={savingAddress} onClick={() => void saveAddress()}>
+                {savingAddress ? <Loader2 className="h-4 w-4 animate-spin" /> : "Kaydet"}
+              </Button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setEditingAddress(true)}>
+              Güncelle
+            </Button>
+          )
+        }
+      >
+        {addressError && <p className="mb-3 text-sm text-red-600">{addressError}</p>}
+        {editingAddress ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="cityId">İl</Label>
+              <select
+                id="cityId"
+                value={addressForm.cityId}
+                onChange={(event) =>
+                  setAddressForm((current) => ({
+                    ...current,
+                    cityId: event.target.value,
+                    districtId: "",
+                  }))
+                }
+                className={selectClass}
+              >
+                <option value="">Seçin</option>
+                {cities.map((city) => (
+                  <option key={city.id} value={city.id}>
+                    {city.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="districtId">İlçe</Label>
+              <select
+                id="districtId"
+                value={addressForm.districtId}
+                disabled={!addressForm.cityId}
+                onChange={(event) =>
+                  setAddressForm((current) => ({ ...current, districtId: event.target.value }))
+                }
+                className={selectClass}
+              >
+                <option value="">{addressForm.cityId ? "Seçin" : "Önce il seçin"}</option>
+                {districts.map((district) => (
+                  <option key={district.id} value={district.id}>
+                    {district.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="address">Adres</Label>
+              <Textarea
+                id="address"
+                value={addressForm.address}
+                onChange={(event) =>
+                  setAddressForm((current) => ({ ...current, address: event.target.value }))
+                }
+                rows={3}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="phone">Telefon</Label>
+              <Input
+                id="phone"
+                value={addressForm.phone}
+                onChange={(event) =>
+                  setAddressForm((current) => ({ ...current, phone: event.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mobile">Cep</Label>
+              <Input
+                id="mobile"
+                value={addressForm.mobile}
+                onChange={(event) =>
+                  setAddressForm((current) => ({ ...current, mobile: event.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="email">E-posta</Label>
+              <Input
+                id="email"
+                type="email"
+                value={addressForm.email}
+                onChange={(event) =>
+                  setAddressForm((current) => ({ ...current, email: event.target.value }))
+                }
+              />
+            </div>
+          </div>
+        ) : (
+          <dl>
+            <InfoRow label="İl" value={company.cityName} />
+            <InfoRow label="İlçe" value={company.districtName} />
+            <InfoRow label="Adres" value={company.address} />
+            <InfoRow label="Telefon" value={company.phone} />
+            <InfoRow label="Cep" value={company.mobile} />
+            <InfoRow label="E-posta" value={company.email} />
+          </dl>
+        )}
       </Section>
 
-      {company.contacts.length > 0 && (
-        <Section title="İletişim Kişileri">
-          <div className="space-y-3">
-            {company.contacts.map((contact, i) => (
-              <div key={contact.id ?? i} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl bg-slate-50 p-3.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-slate-200">
-                  <Users className="h-4 w-4 text-slate-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800">{contact.name}</p>
-                  <p className="text-xs text-slate-400">{CONTACT_TYPE_LABELS[contact.contactType]}</p>
-                </div>
-                <div className="flex flex-wrap gap-3 text-xs text-slate-500">
-                  {(contact.mobile || contact.phone) && (
-                    <span className="flex items-center gap-1">
-                      <Phone className="h-3 w-3" />
-                      {contact.mobile ?? contact.phone}
-                    </span>
-                  )}
-                  {contact.email && (
-                    <span className="flex items-center gap-1">
-                      <Mail className="h-3 w-3" />
-                      {contact.email}
-                    </span>
-                  )}
-                </div>
+      <Section
+        title="İletişim Kişileri"
+        action={
+          !addingContact ? (
+            <Button variant="outline" size="sm" onClick={() => setAddingContact(true)}>
+              <UserPlus className="mr-1 h-4 w-4" />
+              Yeni kişi
+            </Button>
+          ) : undefined
+        }
+      >
+        {contactError && <p className="mb-3 text-sm text-red-600">{contactError}</p>}
+
+        {company.contacts.length === 0 && !addingContact && (
+          <p className="text-sm text-slate-400">Henüz iletişim kişisi yok.</p>
+        )}
+
+        <div className="space-y-3">
+          {company.contacts.map((contact, i) => (
+            <div key={contact.id ?? i} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl bg-slate-50 p-3.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-slate-200">
+                <Users className="h-4 w-4 text-slate-400" />
               </div>
-            ))}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800">{contact.name}</p>
+                <p className="text-xs text-slate-400">{CONTACT_TYPE_LABELS[contact.contactType]}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                {(contact.mobile || contact.phone) && (
+                  <span className="flex items-center gap-1">
+                    <Phone className="h-3 w-3" />
+                    {contact.mobile ?? contact.phone}
+                  </span>
+                )}
+                {contact.email && (
+                  <span className="flex items-center gap-1">
+                    <Mail className="h-3 w-3" />
+                    {contact.email}
+                  </span>
+                )}
+                {contact.id && (
+                  <button
+                    type="button"
+                    disabled={deletingId === contact.id}
+                    onClick={() => void removeContact(contact.id!)}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                    aria-label="Kişiyi sil"
+                  >
+                    {deletingId === contact.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {addingContact && (
+          <div className="mt-4 space-y-3 rounded-xl border border-slate-200 p-4">
+            <p className="text-sm font-medium text-slate-700">Yeni kişi</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="contactName">Ad soyad</Label>
+                <Input
+                  id="contactName"
+                  value={contactForm.name}
+                  onChange={(event) => setContactForm((current) => ({ ...current, name: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="contactType">Görev</Label>
+                <select
+                  id="contactType"
+                  value={contactForm.contactType}
+                  onChange={(event) =>
+                    setContactForm((current) => ({
+                      ...current,
+                      contactType: event.target.value as ContactType,
+                    }))
+                  }
+                  className={selectClass}
+                >
+                  {Object.entries(CONTACT_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="contactPhone">Telefon</Label>
+                <Input
+                  id="contactPhone"
+                  value={contactForm.phone}
+                  onChange={(event) => setContactForm((current) => ({ ...current, phone: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="contactMobile">Cep</Label>
+                <Input
+                  id="contactMobile"
+                  value={contactForm.mobile}
+                  onChange={(event) => setContactForm((current) => ({ ...current, mobile: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="contactEmail">E-posta</Label>
+                <Input
+                  id="contactEmail"
+                  type="email"
+                  value={contactForm.email}
+                  onChange={(event) => setContactForm((current) => ({ ...current, email: event.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={savingContact}
+                onClick={() => {
+                  setAddingContact(false);
+                  setContactError("");
+                }}
+              >
+                Vazgeç
+              </Button>
+              <Button size="sm" disabled={savingContact} onClick={() => void addContact()}>
+                {savingContact ? <Loader2 className="h-4 w-4 animate-spin" /> : "Ekle"}
+              </Button>
+            </div>
           </div>
-        </Section>
-      )}
+        )}
+      </Section>
     </div>
   );
 }
@@ -350,8 +803,9 @@ function SmsTab({ company }: { company: CompanyDetail }) {
               <div key={o.id ?? i} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
                 <span className="font-mono text-sm font-medium text-slate-800">{o.name}</span>
                 <Badge variant="outline" className={
-                  o.status === "APPROVED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                  o.status === "ACTIVE" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                   o.status === "PENDING" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                  o.status === "PASSIVE" ? "bg-slate-100 text-slate-600 border-slate-200" :
                   "bg-red-50 text-red-600 border-red-200"
                 }>
                   {ORIGINATOR_STATUS_LABELS[o.status]}
@@ -385,17 +839,58 @@ function SmsTab({ company }: { company: CompanyDetail }) {
 
 /* ──────────────────────────── Services Tab ──────────────────────────── */
 
-function ServicesTab({ company }: { company: CompanyDetail }) {
+function ServicesTab({
+  company,
+  onUpdated,
+}: {
+  company: CompanyDetail;
+  onUpdated: (company: CompanyDetail) => void;
+}) {
+  const [catalog, setCatalog] = useState<Service[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    referenceService
+      .getServices()
+      .then(setCatalog)
+      .catch(() => setCatalog([]));
+  }, []);
+
+  const assignedIds = new Set(company.services.map((item) => item.serviceId));
+  const available = catalog.filter((item) => item.isActive && !assignedIds.has(item.id));
+
+  const addService = async () => {
+    if (!selectedId) return;
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await companyService.addService(company.id, selectedId);
+      onUpdated(updated);
+      setSelectedId("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Hizmet eklenemedi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {company.services.length > 0 ? (
-        <Section title="Tanımlı Hizmetler">
+      <Section title="Tanımlı Hizmetler">
+        {company.services.length > 0 ? (
           <div className="space-y-2">
             {company.services.map((service, i) => (
               <div key={service.serviceId ?? i} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
                 <div className="flex items-center gap-3">
                   <div className={`h-2 w-2 rounded-full ${service.isActive ? "bg-emerald-500" : "bg-slate-300"}`} />
-                  <span className="text-sm font-medium text-slate-800">{service.serviceName ?? service.serviceId}</span>
+                  <span className="text-sm font-medium text-slate-800">
+                    {service.serviceName ?? service.serviceId}
+                    {service.serviceCode === "SMS" ? (
+                      <span className="ml-2 text-xs font-normal text-slate-400">varsayılan</span>
+                    ) : null}
+                  </span>
                 </div>
                 <Badge variant="outline" className={service.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}>
                   {service.isActive ? "Aktif" : "Pasif"}
@@ -403,10 +898,40 @@ function ServicesTab({ company }: { company: CompanyDetail }) {
               </div>
             ))}
           </div>
-        </Section>
-      ) : (
-        <Section><EmptyState message="Henüz hizmet tanımlanmamış." /></Section>
-      )}
+        ) : (
+          <p className="text-sm text-slate-400">Henüz hizmet tanımlanmamış.</p>
+        )}
+
+        {available.length > 0 && (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <p className="mb-2 text-xs font-medium text-slate-500">Yeni hizmet ekle</p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <select
+                value={selectedId}
+                onChange={(event) => setSelectedId(event.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">Hizmet seçin</option>
+                {available.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                className="shrink-0"
+                disabled={!selectedId || saving}
+                onClick={() => void addService()}
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
+                Ekle
+              </Button>
+            </div>
+            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          </div>
+        )}
+      </Section>
 
       {company.ipRules.length > 0 && (
         <Section title="IP Kuralları">
@@ -637,30 +1162,175 @@ function UsersTab({
 
 /* ──────────────────────────── Pricing Tab ──────────────────────────── */
 
-function PricingTab({ company }: { company: CompanyDetail }) {
+function PricingTab({
+  company,
+  onUpdated,
+}: {
+  company: CompanyDetail;
+  onUpdated: (company: CompanyDetail) => void;
+}) {
+  const [lists, setLists] = useState<PriceList[]>([]);
+  const [selectedId, setSelectedId] = useState(company.priceListId ?? "");
+  const [items, setItems] = useState<PriceListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setSelectedId(company.priceListId ?? "");
+  }, [company.priceListId]);
+
+  useEffect(() => {
+    pricingService
+      .listPriceLists()
+      .then(setLists)
+      .catch(() => setLists([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setItems([]);
+      return;
+    }
+    pricingService
+      .getListItems(selectedId)
+      .then(setItems)
+      .catch(() => setItems([]));
+  }, [selectedId]);
+
+  const compatibleLists = lists.filter((list) => {
+    if (company.isDealer) return list.listType === "DEALER";
+    return list.listType === "CUSTOMER";
+  });
+  const options = compatibleLists.filter(
+    (list) => list.isActive || list.id === company.priceListId,
+  );
+  const currentMissing =
+    company.priceListId && !options.some((list) => list.id === company.priceListId);
+  const selectedList = lists.find((list) => list.id === selectedId);
+  const dirty = selectedId !== (company.priceListId ?? "");
+
+  const save = async (priceListId: string | null) => {
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await companyService.update(company.id, { priceListId });
+      onUpdated(updated);
+      setSelectedId(updated.priceListId ?? "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fiyat şablonu kaydedilemedi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div>
-      {company.priceListName ? (
-        <Section>
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100">
-              <CreditCard className="h-6 w-6 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Atanmış Fiyat Şablonu</p>
-              <p className="text-lg font-bold text-slate-900">{company.priceListName}</p>
-            </div>
-          </div>
-        </Section>
+    <Section
+      title="Fiyat Şablonu"
+      action={
+        <Link href="/admin/pricing" className="text-xs font-medium text-blue-600 hover:underline">
+          Şablonları yönet
+        </Link>
+      }
+    >
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        </div>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/50 py-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 mb-3">
-            <CreditCard className="h-6 w-6 text-amber-500" />
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <div
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                company.priceListName ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
+              }`}
+            >
+              <CreditCard className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-slate-400">Şu an atanan</p>
+              <p className="truncate text-sm font-semibold text-slate-900">
+                {company.priceListName ?? "Atanmamış"}
+              </p>
+            </div>
           </div>
-          <p className="text-sm font-medium text-amber-700">Fiyat listesi atanmamış</p>
-          <p className="mt-1 text-xs text-amber-400">Firma oluşturulurken fiyat şablonu atanabilir</p>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="priceListId">Şablon seç</Label>
+            <select
+              id="priceListId"
+              value={selectedId}
+              onChange={(event) => setSelectedId(event.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Şablon seçin</option>
+              {currentMissing && company.priceListId && (
+                <option value={company.priceListId}>{company.priceListName}</option>
+              )}
+              {options.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name} ({PRICE_LIST_TYPE_LABELS[list.listType]})
+                </option>
+              ))}
+            </select>
+            {options.length === 0 && (
+              <p className="text-xs text-slate-500">
+                {company.isDealer ? "Bayi" : "Müşteri"} tipi uygun şablon yok. Önce fiyat yönetiminde oluşturun.
+              </p>
+            )}
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={!dirty || saving} onClick={() => void save(selectedId || null)}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : company.priceListId ? "Şablonu güncelle" : "Şablon ata"}
+            </Button>
+            {company.priceListId && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={saving}
+                onClick={() => void save(null)}
+              >
+                Atamayı kaldır
+              </Button>
+            )}
+          </div>
+
+          {selectedList && items.length > 0 && (
+            <div className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="bg-slate-50 px-4 py-2 text-xs font-medium text-slate-500">
+                {selectedList.name} önizleme
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="px-4 py-2 text-left font-medium text-slate-500">Ürün</th>
+                    <th className="px-4 py-2 text-right font-medium text-slate-500">
+                      Birim fiyat ({selectedList.currency})
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id} className="border-b border-slate-50 last:border-0">
+                      <td className="px-4 py-2 text-slate-800">{item.productName ?? item.productCode}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                        {Number(item.unitPrice).toLocaleString("tr-TR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 4,
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
-    </div>
+    </Section>
   );
 }

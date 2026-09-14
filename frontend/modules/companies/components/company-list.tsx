@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Building2, Eye, ChevronDown, Loader2, LogIn } from "lucide-react";
-import type { CompanyListItem, CompanyStatus } from "../types";
-import { COMPANY_TYPE_LABELS, COMPANY_STATUS_LABELS } from "../types";
+import { Plus, Search, Building2, Eye, ChevronDown, Loader2, LogIn, X, Tags } from "lucide-react";
+import type { CompanyListItem, CompanyStatus, CustomerType } from "../types";
+import { COMPANY_TYPE_LABELS, COMPANY_STATUS_LABELS, CUSTOMER_TYPE_LABELS } from "../types";
+import { CustomerCategory, CustomerSubcategory, referenceService } from "../services/reference.service";
 
 interface CompanyListProps {
   companies: CompanyListItem[];
@@ -24,6 +25,12 @@ interface CompanyListProps {
   onSearch: (search: string) => void;
   onStatusFilter: (status: CompanyStatus | "ALL") => void;
   onTypeFilter?: (type: "ALL" | "DEALER" | "CUSTOMER") => void;
+  customerTypeFilter?: CustomerType | "ALL";
+  categoryIdFilter?: string;
+  subcategoryIdFilter?: string;
+  onCustomerTypeFilter?: (value: CustomerType | "ALL") => void;
+  onCategoryFilter?: (categoryId: string) => void;
+  onSubcategoryFilter?: (subcategoryId: string) => void;
   onStatusToggle?: (id: string, newStatus: CompanyStatus) => Promise<void>;
   onImpersonate?: (companyId: string) => Promise<void> | void;
 }
@@ -50,6 +57,12 @@ export function CompanyList({
   onSearch,
   onStatusFilter,
   onTypeFilter,
+  customerTypeFilter = "ALL",
+  categoryIdFilter = "",
+  subcategoryIdFilter = "",
+  onCustomerTypeFilter,
+  onCategoryFilter,
+  onSubcategoryFilter,
   onStatusToggle,
   onImpersonate,
 }: CompanyListProps) {
@@ -60,6 +73,35 @@ export function CompanyList({
   const [toggleError, setToggleError] = useState("");
   const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
   const [impersonateError, setImpersonateError] = useState("");
+  const [categories, setCategories] = useState<CustomerCategory[]>([]);
+  const [subcategories, setSubcategories] = useState<CustomerSubcategory[]>([]);
+
+  useEffect(() => {
+    referenceService
+      .getCustomerCategories()
+      .then(setCategories)
+      .catch(() => setCategories([]));
+  }, []);
+
+  useEffect(() => {
+    if (!categoryIdFilter) {
+      setSubcategories([]);
+      return;
+    }
+    referenceService
+      .getCustomerSubcategories(categoryIdFilter)
+      .then(setSubcategories)
+      .catch(() => setSubcategories([]));
+  }, [categoryIdFilter]);
+
+  const hasClassificationFilter =
+    customerTypeFilter !== "ALL" || Boolean(categoryIdFilter) || Boolean(subcategoryIdFilter);
+
+  const clearClassification = () => {
+    onCustomerTypeFilter?.("ALL");
+    onCategoryFilter?.("");
+    onSubcategoryFilter?.("");
+  };
 
   const handleSearch = () => {
     onSearch(searchValue);
@@ -208,45 +250,119 @@ export function CompanyList({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="Firma adı veya kodu ile ara..."
-            className="pl-9"
-          />
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Firma adı veya kodu ile ara..."
+              className="pl-9"
+            />
+          </div>
+          <select
+            defaultValue="ALL"
+            onChange={(e) =>
+              onStatusFilter(e.target.value as CompanyStatus | "ALL")
+            }
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-40"
+          >
+            <option value="ALL">Tüm Durumlar</option>
+            {Object.entries(COMPANY_STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            defaultValue="ALL"
+            onChange={(e) =>
+              onTypeFilter?.(e.target.value as "ALL" | "DEALER" | "CUSTOMER")
+            }
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-40"
+          >
+            <option value="ALL">Tümü</option>
+            <option value="DEALER">Bayiler</option>
+            <option value="CUSTOMER">Müşteriler</option>
+          </select>
+          <Button variant="outline" onClick={handleSearch}>
+            Ara
+          </Button>
         </div>
-        <select
-          defaultValue="ALL"
-          onChange={(e) =>
-            onStatusFilter(e.target.value as CompanyStatus | "ALL")
-          }
-          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-40"
-        >
-          <option value="ALL">Tüm Durumlar</option>
-          {Object.entries(COMPANY_STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          defaultValue="ALL"
-          onChange={(e) =>
-            onTypeFilter?.(e.target.value as "ALL" | "DEALER" | "CUSTOMER")
-          }
-          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:w-40"
-        >
-          <option value="ALL">Tümü</option>
-          <option value="DEALER">Bayiler</option>
-          <option value="CUSTOMER">Müşteriler</option>
-        </select>
-        <Button variant="outline" onClick={handleSearch}>
-          Ara
-        </Button>
+
+        <div className="border-t border-slate-100 pt-3">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">
+              <Tags className="h-3.5 w-3.5" />
+              Sınıflandırma
+            </p>
+            {hasClassificationFilter && (
+              <button
+                type="button"
+                onClick={clearClassification}
+                className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-800"
+              >
+                <X className="h-3.5 w-3.5" />
+                Filtreleri temizle
+              </button>
+            )}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">Müşteri Tipi</span>
+              <select
+                value={customerTypeFilter}
+                onChange={(e) => onCustomerTypeFilter?.(e.target.value as CustomerType | "ALL")}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="ALL">Tümü</option>
+                {Object.entries(CUSTOMER_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">Ana Kategori</span>
+              <select
+                value={categoryIdFilter}
+                onChange={(e) => {
+                  onCategoryFilter?.(e.target.value);
+                  onSubcategoryFilter?.("");
+                }}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">Tümü</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">Alt Kategori</span>
+              <select
+                value={subcategoryIdFilter}
+                disabled={!categoryIdFilter}
+                onChange={(e) => onSubcategoryFilter?.(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">
+                  {categoryIdFilter ? "Tümü" : "Önce ana kategori seçin"}
+                </option>
+                {subcategories.map((subcategory) => (
+                  <option key={subcategory.id} value={subcategory.id}>
+                    {subcategory.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
       </div>
 
       {impersonateError && (
@@ -261,10 +377,10 @@ export function CompanyList({
             <TableRow className="bg-slate-50">
               <TableHead>Firma Kodu</TableHead>
               <TableHead>Firma Adı</TableHead>
+              <TableHead>Kategori</TableHead>
               <TableHead>Tip</TableHead>
               <TableHead>Hesap Türü</TableHead>
               <TableHead>Durum</TableHead>
-              <TableHead>E-posta</TableHead>
               <TableHead className="text-right">İşlem</TableHead>
             </TableRow>
           </TableHeader>
@@ -296,6 +412,22 @@ export function CompanyList({
                   <TableCell className="font-medium text-slate-900">
                     {company.name}
                   </TableCell>
+                  <TableCell>
+                    {company.categoryName || company.customerType ? (
+                      <div>
+                        <div className="text-sm text-slate-800">
+                          {[company.categoryName, company.subcategoryName].filter(Boolean).join(" / ") || "—"}
+                        </div>
+                        {company.customerType && (
+                          <div className="text-xs text-slate-400">
+                            {CUSTOMER_TYPE_LABELS[company.customerType]}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-slate-600">
                     {COMPANY_TYPE_LABELS[company.companyType]}
                   </TableCell>
@@ -316,9 +448,6 @@ export function CompanyList({
                         {COMPANY_STATUS_LABELS[company.status]}
                       </span>
                     </button>
-                  </TableCell>
-                  <TableCell className="text-slate-500">
-                    {company.email ?? "—"}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">

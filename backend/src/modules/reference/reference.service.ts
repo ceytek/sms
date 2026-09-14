@@ -6,6 +6,8 @@ import { District } from './entities/district.entity.js';
 import { SmsProvider } from './entities/sms-provider.entity.js';
 import { Service } from './entities/service.entity.js';
 import { Product } from './entities/product.entity.js';
+import { CustomerCategory } from './entities/customer-category.entity.js';
+import { CustomerSubcategory } from './entities/customer-subcategory.entity.js';
 import { PriceList } from '../pricing/entities/price-list.entity.js';
 import { CompanySmsAccount } from '../companies/entities/company-sms-account.entity.js';
 import { CreateProviderDto } from './dto/create-provider.dto.js';
@@ -24,6 +26,10 @@ export class ReferenceService {
     private readonly serviceRepository: Repository<Service>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+    @InjectRepository(CustomerCategory)
+    private readonly customerCategoryRepository: Repository<CustomerCategory>,
+    @InjectRepository(CustomerSubcategory)
+    private readonly customerSubcategoryRepository: Repository<CustomerSubcategory>,
     @InjectRepository(PriceList)
     private readonly priceListRepository: Repository<PriceList>,
     @InjectRepository(CompanySmsAccount)
@@ -66,6 +72,20 @@ export class ReferenceService {
     return this.priceListRepository.find({
       where: { isActive: true },
       order: { name: 'ASC' },
+    });
+  }
+
+  findCustomerCategories() {
+    return this.customerCategoryRepository.find({
+      where: { isActive: true },
+      order: { sortOrder: 'ASC', name: 'ASC' },
+    });
+  }
+
+  findCustomerSubcategories(categoryId: string) {
+    return this.customerSubcategoryRepository.find({
+      where: { categoryId, isActive: true },
+      order: { sortOrder: 'ASC', name: 'ASC' },
     });
   }
 

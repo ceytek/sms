@@ -17,6 +17,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CompanyType } from '../../../common/enums/company-type.enum.js';
+import { CustomerType } from '../../../common/enums/customer-type.enum.js';
 import { ContactType } from '../../../common/enums/contact-type.enum.js';
 import { OriginatorStatus } from '../../../common/enums/originator-status.enum.js';
 import { NotificationType } from '../../../common/enums/notification-type.enum.js';
@@ -225,6 +226,18 @@ export class CreateCompanyDto {
 
   @IsEnum(CompanyType)
   companyType: CompanyType;
+
+  @IsOptional()
+  @IsEnum(CustomerType)
+  customerType?: CustomerType;
+
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  subcategoryId?: string;
 
   @IsOptional()
   @IsBoolean()

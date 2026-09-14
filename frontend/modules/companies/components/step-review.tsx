@@ -1,8 +1,8 @@
 "use client";
 
-import { CompanyWizardData, COMPANY_TYPE_LABELS, CONTACT_TYPE_LABELS } from "../types";
+import { CompanyWizardData, COMPANY_TYPE_LABELS, CONTACT_TYPE_LABELS, CUSTOMER_TYPE_LABELS } from "../types";
 import { PriceList, PRICE_LIST_TYPE_LABELS } from "@/modules/pricing";
-import { SmsProvider, Service, City, District } from "../services/reference.service";
+import { SmsProvider, Service, City, District, DEFAULT_SERVICE_CODE, CustomerCategory, CustomerSubcategory } from "../services/reference.service";
 
 interface StepReviewProps {
   data: CompanyWizardData;
@@ -11,6 +11,8 @@ interface StepReviewProps {
   priceLists: PriceList[];
   cities: City[];
   districts: District[];
+  categories: CustomerCategory[];
+  subcategories: CustomerSubcategory[];
 }
 
 function ReviewSection({
@@ -49,14 +51,19 @@ export function StepReview({
   priceLists,
   cities,
   districts,
+  categories,
+  subcategories,
 }: StepReviewProps) {
   const provider = providers.find((p) => p.id === data.smsProviderId);
   const city = cities.find((c) => c.id === data.cityId);
   const district = districts.find((d) => d.id === data.districtId);
+  const category = categories.find((item) => item.id === data.categoryId);
+  const subcategory = subcategories.find((item) => item.id === data.subcategoryId);
   const priceList = priceLists.find((l) => l.id === data.priceListId);
-  const enabledServices = services.filter((s) =>
-    data.enabledServiceIds.includes(s.id)
+  const enabledServices = services.filter(
+    (s) => data.enabledServiceIds.includes(s.id) && s.code !== DEFAULT_SERVICE_CODE
   );
+  const smsService = services.find((s) => s.code === DEFAULT_SERVICE_CODE);
   const validOriginators = data.originators.filter((o) => o.trim().length > 0);
   const validContacts = data.contacts.filter((c) => c.name.trim().length > 0);
 
@@ -72,6 +79,12 @@ export function StepReview({
           value={data.accountType === "DEALER" ? "Bayi" : "Müşteri"}
         />
         <ReviewRow label="Firma Tipi" value={COMPANY_TYPE_LABELS[data.companyType]} />
+        <ReviewRow
+          label="Müşteri Tipi"
+          value={data.customerType ? CUSTOMER_TYPE_LABELS[data.customerType] : undefined}
+        />
+        <ReviewRow label="Ana Kategori" value={category?.name} />
+        <ReviewRow label="Alt Kategori" value={subcategory?.name} />
         <ReviewRow label="Firma Adı" value={data.name} />
         {data.companyType === "CORPORATE" ? (
           <>
@@ -140,20 +153,17 @@ export function StepReview({
         ) : (
           <p className="text-xs text-slate-400">Fiyat listesi atanmadı</p>
         )}
-        {enabledServices.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {enabledServices.map((s) => (
-              <span
-                key={s.id}
-                className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700"
-              >
-                {s.name}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-slate-400">Hizmet seçilmedi</p>
-        )}
+        <div className="mt-2 flex flex-wrap gap-1">
+          {(smsService ? [smsService, ...enabledServices] : enabledServices).map((s) => (
+            <span
+              key={s.id}
+              className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700"
+            >
+              {s.name}
+              {s.code === DEFAULT_SERVICE_CODE ? " (varsayılan)" : ""}
+            </span>
+          ))}
+        </div>
       </ReviewSection>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">

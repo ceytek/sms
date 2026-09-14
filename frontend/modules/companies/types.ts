@@ -1,4 +1,10 @@
 export type CompanyType = "CORPORATE" | "INDIVIDUAL";
+export type CustomerType =
+  | "PRIVATE_SECTOR"
+  | "PUBLIC"
+  | "NGO_CHAMBER"
+  | "DEALER_PARTNER"
+  | "INDIVIDUAL_BUSINESS";
 export type CompanyStatus = "ACTIVE" | "PASSIVE" | "SUSPENDED";
 export type ContactType = "MANAGER" | "TECHNICAL" | "ACCOUNTING" | "PERSONNEL";
 export type IpRuleType = "NO_CONTROL" | "ALLOW_LIST" | "BLOCK_LIST";
@@ -17,6 +23,11 @@ export interface CompanyListItem {
   email?: string;
   phone?: string;
   createdAt: string;
+  customerType?: CustomerType;
+  categoryId?: string;
+  categoryName?: string;
+  subcategoryId?: string;
+  subcategoryName?: string;
 }
 
 export interface CompanyContact {
@@ -73,6 +84,7 @@ export interface CompanySecuritySettings {
 export interface CompanyServiceAssignment {
   serviceId: string;
   serviceName?: string;
+  serviceCode?: string;
   isActive: boolean;
   startDate?: string;
   endDate?: string;
@@ -92,6 +104,11 @@ export interface CompanyDetail extends CompanyListItem {
   districtId?: number;
   cityName?: string;
   districtName?: string;
+  customerType?: CustomerType;
+  categoryId?: string;
+  categoryName?: string;
+  subcategoryId?: string;
+  subcategoryName?: string;
   address?: string;
   mobile?: string;
   showAnnouncement: boolean;
@@ -164,6 +181,9 @@ export interface CreateCompanyServiceDto {
 
 export interface CreateCompanyDto {
   companyType: CompanyType;
+  customerType?: CustomerType;
+  categoryId?: string;
+  subcategoryId?: string;
   name: string;
   taxOffice?: string;
   taxNumber?: string;
@@ -206,6 +226,9 @@ export interface CompanyListQuery {
   search?: string;
   status?: CompanyStatus;
   isDealer?: boolean;
+  customerType?: CustomerType;
+  categoryId?: string;
+  subcategoryId?: string;
   page?: number;
   limit?: number;
 }
@@ -235,6 +258,9 @@ export interface WizardContact {
 export interface CompanyWizardData {
   accountType: AccountType;
   companyType: CompanyType;
+  customerType: CustomerType | "";
+  categoryId: string;
+  subcategoryId: string;
   name: string;
   taxOffice: string;
   taxNumber: string;
@@ -261,6 +287,9 @@ export interface CompanyWizardData {
 export const defaultWizardData: CompanyWizardData = {
   accountType: "CUSTOMER",
   companyType: "CORPORATE",
+  customerType: "",
+  categoryId: "",
+  subcategoryId: "",
   name: "",
   taxOffice: "",
   taxNumber: "",
@@ -289,6 +318,14 @@ export const COMPANY_TYPE_LABELS: Record<CompanyType, string> = {
   INDIVIDUAL: "Bireysel",
 };
 
+export const CUSTOMER_TYPE_LABELS: Record<CustomerType, string> = {
+  PRIVATE_SECTOR: "Özel Sektör",
+  PUBLIC: "Kamu",
+  NGO_CHAMBER: "STK / Oda",
+  DEALER_PARTNER: "Bayi / İş Ortağı",
+  INDIVIDUAL_BUSINESS: "Bireysel İşletme",
+};
+
 export const COMPANY_STATUS_LABELS: Record<CompanyStatus, string> = {
   ACTIVE: "Aktif",
   PASSIVE: "Pasif",
@@ -315,7 +352,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
 };
 
 export const ORIGINATOR_STATUS_LABELS: Record<OriginatorStatus, string> = {
-  PENDING: "Beklemede",
+  PENDING: "Onay bekliyor",
   ACTIVE: "Aktif",
   REJECTED: "Reddedildi",
   PASSIVE: "Pasif",

@@ -1,6 +1,7 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { CompanyStatus } from '../../../common/enums/company-status.enum.js';
+import { CustomerType } from '../../../common/enums/customer-type.enum.js';
 
 export class CompanyQueryDto {
   @IsOptional()
@@ -28,4 +29,16 @@ export class CompanyQueryDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   isDealer?: boolean;
+
+  @IsOptional()
+  @IsEnum(CustomerType)
+  customerType?: CustomerType;
+
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  subcategoryId?: string;
 }

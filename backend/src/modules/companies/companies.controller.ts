@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -16,6 +17,8 @@ import { CreateCompanyDto } from './dto/create-company.dto.js';
 import { UpdateCompanyDto } from './dto/update-company.dto.js';
 import { CompanyQueryDto } from './dto/company-query.dto.js';
 import { UpdateCompanyStatusDto } from './dto/update-company-status.dto.js';
+import { AddCompanyServiceDto } from './dto/add-company-service.dto.js';
+import { CreateContactDto } from './dto/create-company.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -73,6 +76,32 @@ export class CompaniesController {
       user.id,
       req.ip,
     );
+  }
+
+  @Post(':id/services')
+  addService(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddCompanyServiceDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.companiesService.addService(id, dto.serviceId, user.id);
+  }
+
+  @Post(':id/contacts')
+  addContact(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateContactDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.companiesService.addContact(id, dto, user.id);
+  }
+
+  @Delete(':id/contacts/:contactId')
+  removeContact(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('contactId', ParseUUIDPipe) contactId: string,
+  ) {
+    return this.companiesService.removeContact(id, contactId);
   }
 
   @Get(':id/users')

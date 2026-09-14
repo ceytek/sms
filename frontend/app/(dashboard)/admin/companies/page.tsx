@@ -8,7 +8,7 @@ import {
   companyService,
   CompanyListItem,
 } from "@/modules/companies";
-import type { CompanyStatus } from "@/modules/companies";
+import type { CompanyStatus, CustomerType } from "@/modules/companies";
 
 export default function CompaniesPage() {
   const router = useRouter();
@@ -17,6 +17,9 @@ export default function CompaniesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<CompanyStatus | "ALL">("ALL");
   const [typeFilter, setTypeFilter] = useState<"ALL" | "DEALER" | "CUSTOMER">("ALL");
+  const [customerTypeFilter, setCustomerTypeFilter] = useState<CustomerType | "ALL">("ALL");
+  const [categoryIdFilter, setCategoryIdFilter] = useState("");
+  const [subcategoryIdFilter, setSubcategoryIdFilter] = useState("");
   const [userRole, setUserRole] = useState<string>("");
 
   useEffect(() => {
@@ -35,6 +38,9 @@ export default function CompaniesPage() {
         search: search || undefined,
         status: statusFilter === "ALL" ? undefined : statusFilter,
         isDealer: typeFilter === "ALL" ? undefined : typeFilter === "DEALER",
+        customerType: customerTypeFilter === "ALL" ? undefined : customerTypeFilter,
+        categoryId: categoryIdFilter || undefined,
+        subcategoryId: subcategoryIdFilter || undefined,
       });
       setCompanies(result.items ?? result.data ?? []);
     } catch {
@@ -42,7 +48,7 @@ export default function CompaniesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [search, statusFilter, typeFilter]);
+  }, [search, statusFilter, typeFilter, customerTypeFilter, categoryIdFilter, subcategoryIdFilter]);
 
   useEffect(() => {
     loadCompanies();
@@ -77,6 +83,15 @@ export default function CompaniesPage() {
         onSearch={setSearch}
         onStatusFilter={setStatusFilter}
         onTypeFilter={setTypeFilter}
+        customerTypeFilter={customerTypeFilter}
+        categoryIdFilter={categoryIdFilter}
+        subcategoryIdFilter={subcategoryIdFilter}
+        onCustomerTypeFilter={setCustomerTypeFilter}
+        onCategoryFilter={(id: string) => {
+          setCategoryIdFilter(id);
+          setSubcategoryIdFilter("");
+        }}
+        onSubcategoryFilter={setSubcategoryIdFilter}
         onStatusToggle={handleStatusToggle}
         onImpersonate={handleImpersonate}
       />

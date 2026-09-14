@@ -11,6 +11,8 @@ import { AuditModule } from './modules/audit/audit.module.js';
 import { PricingModule } from './modules/pricing/pricing.module.js';
 import { AdsModule } from './modules/ads/ads.module.js';
 import { MapModule } from './modules/map/map.module.js';
+import { OriginatorsModule } from './modules/originators/originators.module.js';
+import { CreditsModule } from './modules/credits/credits.module.js';
 import { User } from './modules/auth/entities/user.entity.js';
 import { Company } from './modules/companies/entities/company.entity.js';
 import { CompanyContact } from './modules/companies/entities/company-contact.entity.js';
@@ -30,12 +32,15 @@ import { District } from './modules/reference/entities/district.entity.js';
 import { SmsProvider } from './modules/reference/entities/sms-provider.entity.js';
 import { Service } from './modules/reference/entities/service.entity.js';
 import { Product } from './modules/reference/entities/product.entity.js';
+import { CustomerCategory } from './modules/reference/entities/customer-category.entity.js';
+import { CustomerSubcategory } from './modules/reference/entities/customer-subcategory.entity.js';
 import { PriceList } from './modules/pricing/entities/price-list.entity.js';
 import { PriceListItem } from './modules/pricing/entities/price-list-item.entity.js';
 import { Wallet } from './modules/wallets/entities/wallet.entity.js';
 import { WalletTransaction } from './modules/wallets/entities/wallet-transaction.entity.js';
 import { CompanyCredential } from './modules/credentials/entities/company-credential.entity.js';
 import { AuditLog } from './modules/audit/entities/audit-log.entity.js';
+import { BannedOriginator } from './modules/originators/entities/banned-originator.entity.js';
 
 const entities = [
   User,
@@ -57,12 +62,15 @@ const entities = [
   SmsProvider,
   Service,
   Product,
+  CustomerCategory,
+  CustomerSubcategory,
   PriceList,
   PriceListItem,
   Wallet,
   WalletTransaction,
   CompanyCredential,
   AuditLog,
+  BannedOriginator,
 ];
 
 @Module({
@@ -96,6 +104,8 @@ const entities = [
     PricingModule,
     AdsModule,
     MapModule,
+    OriginatorsModule,
+    CreditsModule,
   ],
 })
 export class AppModule {}

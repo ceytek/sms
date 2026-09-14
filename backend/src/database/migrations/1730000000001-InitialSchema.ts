@@ -524,6 +524,7 @@ export class InitialSchema1730000000001 implements MigrationInterface {
       ('a0000001-0000-4000-8000-000000000003', 'VOICE_TELEKOM', 'VoiceTelekom', true, '{"fields":["username","password","subscriberNo","apiKey"]}');
 
       INSERT INTO "services" ("id", "code", "name", "description", "is_active") VALUES
+      ('b0000001-0000-4000-8000-000000000006', 'SMS', 'SMS Servisi', 'SMS gönderim servisi', true),
       ('b0000001-0000-4000-8000-000000000001', 'KVKK', 'KVKK Servisi', 'KVKK uyumluluk servisi', true),
       ('b0000001-0000-4000-8000-000000000002', 'SURVEY', 'Anket Servisi', 'SMS anket servisi', true),
       ('b0000001-0000-4000-8000-000000000003', 'RET', 'RET Servisi', 'Ret bildirim servisi', true),

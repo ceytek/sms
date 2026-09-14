@@ -8,8 +8,11 @@ import {
 import { BaseEntity } from '../../../common/entities/base.entity.js';
 import { CompanyType } from '../../../common/enums/company-type.enum.js';
 import { CompanyStatus } from '../../../common/enums/company-status.enum.js';
+import { CustomerType } from '../../../common/enums/customer-type.enum.js';
 import { City } from '../../reference/entities/city.entity.js';
 import { District } from '../../reference/entities/district.entity.js';
+import { CustomerCategory } from '../../reference/entities/customer-category.entity.js';
+import { CustomerSubcategory } from '../../reference/entities/customer-subcategory.entity.js';
 import type { User } from '../../auth/entities/user.entity.js';
 import type { CompanyContact } from './company-contact.entity.js';
 import type { CompanyNote } from './company-note.entity.js';
@@ -40,6 +43,14 @@ export class Company extends BaseEntity {
     enum: CompanyType,
   })
   companyType: CompanyType;
+
+  @Column({
+    name: 'customer_type',
+    type: 'enum',
+    enum: CustomerType,
+    nullable: true,
+  })
+  customerType?: CustomerType;
 
   @Column({
     type: 'enum',
@@ -81,6 +92,12 @@ export class Company extends BaseEntity {
   @Column({ name: 'district_id', type: 'int', nullable: true })
   districtId?: number;
 
+  @Column({ name: 'category_id', type: 'uuid', nullable: true })
+  categoryId?: string;
+
+  @Column({ name: 'subcategory_id', type: 'uuid', nullable: true })
+  subcategoryId?: string;
+
   @Column({ type: 'text', nullable: true })
   address?: string;
 
@@ -114,6 +131,14 @@ export class Company extends BaseEntity {
   @ManyToOne(() => District, { nullable: true })
   @JoinColumn({ name: 'district_id' })
   district?: District;
+
+  @ManyToOne(() => CustomerCategory, { nullable: true })
+  @JoinColumn({ name: 'category_id' })
+  category?: CustomerCategory;
+
+  @ManyToOne(() => CustomerSubcategory, { nullable: true })
+  @JoinColumn({ name: 'subcategory_id' })
+  subcategory?: CustomerSubcategory;
 
   @OneToMany('User', 'company')
   users: User[];

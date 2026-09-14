@@ -18,6 +18,9 @@ export function buildCreateCompanyPayload(data: CompanyWizardData): CreateCompan
   if (data.phone?.trim()) payload.phone = data.phone.trim();
   if (data.mobile?.trim()) payload.mobile = data.mobile.trim();
   if (data.email?.trim()) payload.email = data.email.trim();
+  if (data.customerType) payload.customerType = data.customerType;
+  if (data.categoryId) payload.categoryId = data.categoryId;
+  if (data.subcategoryId) payload.subcategoryId = data.subcategoryId;
 
   if (data.smsProviderId) {
     payload.smsAccounts = [{

@@ -11,9 +11,11 @@ import {
   IsUUID,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { CompanyType } from '../../../common/enums/company-type.enum.js';
+import { CustomerType } from '../../../common/enums/customer-type.enum.js';
 import {
   CreateContactDto,
   CreateCreditAlertDto,
@@ -34,6 +36,21 @@ export class UpdateCompanyDto {
   @IsOptional()
   @IsEnum(CompanyType)
   companyType?: CompanyType;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsEnum(CustomerType)
+  customerType?: CustomerType | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  categoryId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsUUID()
+  subcategoryId?: string | null;
 
   @IsOptional()
   @IsBoolean()
@@ -76,12 +93,16 @@ export class UpdateCompanyDto {
   serialNumber?: string;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
   @IsInt()
-  cityId?: number;
+  cityId?: number | null;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
   @IsInt()
-  districtId?: number;
+  districtId?: number | null;
 
   @IsOptional()
   @IsString()
@@ -98,6 +119,7 @@ export class UpdateCompanyDto {
   mobile?: string;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== '' && value != null)
   @IsEmail()
   @MaxLength(255)
   email?: string;
@@ -146,8 +168,9 @@ export class UpdateCompanyDto {
   services?: CreateCompanyServiceDto[];
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== null)
   @IsUUID()
-  priceListId?: string;
+  priceListId?: string | null;
 
   @IsOptional()
   @ValidateNested()

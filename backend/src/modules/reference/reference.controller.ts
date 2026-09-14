@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, ParseUUIDPipe } from '@nestjs/common';
 import { ReferenceService } from './reference.service.js';
 
 @Controller('reference')
@@ -33,5 +33,15 @@ export class ReferenceController {
   @Get('price-lists')
   getPriceLists() {
     return this.referenceService.findPriceLists();
+  }
+
+  @Get('customer-categories')
+  getCustomerCategories() {
+    return this.referenceService.findCustomerCategories();
+  }
+
+  @Get('customer-categories/:id/subcategories')
+  getCustomerSubcategories(@Param('id', ParseUUIDPipe) id: string) {
+    return this.referenceService.findCustomerSubcategories(id);
   }
 }

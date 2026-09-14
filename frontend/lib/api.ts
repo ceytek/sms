@@ -15,6 +15,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
 
   const config: RequestInit = {
     method,
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

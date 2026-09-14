@@ -5,6 +5,8 @@ import { District } from './entities/district.entity.js';
 import { SmsProvider } from './entities/sms-provider.entity.js';
 import { Service } from './entities/service.entity.js';
 import { Product } from './entities/product.entity.js';
+import { CustomerCategory } from './entities/customer-category.entity.js';
+import { CustomerSubcategory } from './entities/customer-subcategory.entity.js';
 import { PriceList } from '../pricing/entities/price-list.entity.js';
 import { CompanySmsAccount } from '../companies/entities/company-sms-account.entity.js';
 import { ReferenceController } from './reference.controller.js';
@@ -20,6 +22,8 @@ import { AuthModule } from '../auth/auth.module.js';
       SmsProvider,
       Service,
       Product,
+      CustomerCategory,
+      CustomerSubcategory,
       PriceList,
       CompanySmsAccount,
     ]),

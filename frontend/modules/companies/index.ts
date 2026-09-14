@@ -6,6 +6,8 @@ export type {
   SmsProvider,
   Service,
   Product,
+  CustomerCategory,
+  CustomerSubcategory,
 } from "./services/reference.service";
 export { CompanyList } from "./components/company-list";
 export { CompanyDetailView } from "./components/company-detail";
@@ -19,6 +21,7 @@ export { StepOriginators } from "./components/step-originators";
 export { StepUser } from "./components/step-user";
 export type {
   CompanyType,
+  CustomerType,
   CompanyStatus,
   CompanyListItem,
   CompanyDetail,
@@ -32,6 +35,7 @@ export type {
 export {
   defaultWizardData,
   COMPANY_TYPE_LABELS,
+  CUSTOMER_TYPE_LABELS,
   COMPANY_STATUS_LABELS,
   CONTACT_TYPE_LABELS,
   IP_RULE_TYPE_LABELS,

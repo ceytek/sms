@@ -21,6 +21,8 @@ import {
   District,
   SmsProvider,
   Service,
+  CustomerCategory,
+  CustomerSubcategory,
 } from "@/modules/companies";
 import { GeneratedCredentials, WizardContact } from "@/modules/companies/types";
 import { buildCreateCompanyPayload } from "@/modules/companies/utils/build-create-payload";
@@ -56,6 +58,8 @@ export default function NewCompanyPage() {
   const [providers, setProviders] = useState<SmsProvider[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
+  const [categories, setCategories] = useState<CustomerCategory[]>([]);
+  const [subcategories, setSubcategories] = useState<CustomerSubcategory[]>([]);
 
   useEffect(() => {
     if (!user || (user.role !== "ADMIN" && user.role !== "DEALER")) {
@@ -70,24 +74,37 @@ export default function NewCompanyPage() {
   useEffect(() => {
     async function loadReferenceData() {
       try {
-        const [citiesData, providersData, servicesData, listsData] =
+        const [citiesData, providersData, servicesData, listsData, categoriesData] =
           await Promise.allSettled([
             referenceService.getCities(),
             referenceService.getSmsProviders(),
             referenceService.getServices(),
             pricingService.listPriceLists(),
+            referenceService.getCustomerCategories(),
           ]);
 
         if (citiesData.status === "fulfilled") setCities(citiesData.value);
         if (providersData.status === "fulfilled") setProviders(providersData.value);
         if (servicesData.status === "fulfilled") setServices(servicesData.value);
         if (listsData.status === "fulfilled") setPriceLists(listsData.value);
+        if (categoriesData.status === "fulfilled") setCategories(categoriesData.value);
       } catch {
         // Reference data optional for wizard display
       }
     }
     loadReferenceData();
   }, []);
+
+  useEffect(() => {
+    if (!data.categoryId) {
+      setSubcategories([]);
+      return;
+    }
+    referenceService
+      .getCustomerSubcategories(data.categoryId)
+      .then(setSubcategories)
+      .catch(() => setSubcategories([]));
+  }, [data.categoryId]);
 
   const handleCityChange = async (cityId: number | undefined) => {
     if (!cityId) {
@@ -206,7 +223,7 @@ export default function NewCompanyPage() {
           <StepSms data={data} onChange={updateData} providers={providers} />
         )}
         {step === 4 && (
-          <StepOriginators data={data} onChange={updateData} />
+          <StepOriginators data={data} onChange={updateData} isDealer={isDealer} />
         )}
         {step === 5 && (
           <StepUser data={data} onChange={updateData} />
@@ -227,6 +244,8 @@ export default function NewCompanyPage() {
             priceLists={priceLists}
             cities={cities}
             districts={districts}
+            categories={categories}
+            subcategories={subcategories}
           />
         )}
       </WizardShell>

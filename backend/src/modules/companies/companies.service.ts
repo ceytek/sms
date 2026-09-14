@@ -17,8 +17,14 @@ import { CompanyCreditAlert } from './entities/company-credit-alert.entity.js';
 import { CompanyService } from './entities/company-service.entity.js';
 import { CompanyIysSettings } from './entities/company-iys-settings.entity.js';
 import { CompanyPriceList } from './entities/company-price-list.entity.js';
+import { Service } from '../reference/entities/service.entity.js';
+import { CustomerCategory } from '../reference/entities/customer-category.entity.js';
+import { CustomerSubcategory } from '../reference/entities/customer-subcategory.entity.js';
 import { Wallet } from '../wallets/entities/wallet.entity.js';
-import { CreateCompanyDto } from './dto/create-company.dto.js';
+import {
+  CreateCompanyDto,
+  CreateCompanyServiceDto,
+} from './dto/create-company.dto.js';
 import { UpdateCompanyDto } from './dto/update-company.dto.js';
 import { CompanyQueryDto } from './dto/company-query.dto.js';
 import { CompanyStatus } from '../../common/enums/company-status.enum.js';
@@ -27,17 +33,24 @@ import { IpRuleType } from '../../common/enums/ip-rule-type.enum.js';
 import { IysStatus } from '../../common/enums/iys-status.enum.js';
 import { OriginatorStatus } from '../../common/enums/originator-status.enum.js';
 import { NotificationType } from '../../common/enums/notification-type.enum.js';
+import { ContactType } from '../../common/enums/contact-type.enum.js';
 import { CredentialType } from '../../common/enums/credential-type.enum.js';
 import { CredentialsService } from '../credentials/credentials.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { User } from '../auth/entities/user.entity.js';
 import { Role } from '../../common/enums/role.enum.js';
+import { OriginatorsService } from '../originators/originators.service.js';
+import { normalizeOriginatorName } from '../originators/originator-name.js';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
+
+const SMS_SERVICE_CODE = 'SMS';
 
 const COMPANY_RELATIONS = [
   'city',
   'district',
+  'category',
+  'subcategory',
   'parentCompany',
   'dealerCompany',
   'contacts',
@@ -64,6 +77,7 @@ export class CompaniesService {
     private readonly dataSource: DataSource,
     private readonly credentialsService: CredentialsService,
     private readonly auditService: AuditService,
+    private readonly originatorsService: OriginatorsService,
   ) {}
 
   async findAll(
@@ -76,6 +90,8 @@ export class CompaniesService {
 
     const qb = this.companyRepository
       .createQueryBuilder('company')
+      .leftJoinAndSelect('company.category', 'category')
+      .leftJoinAndSelect('company.subcategory', 'subcategory')
       .where('company.deleted_at IS NULL');
 
     if (user?.role === Role.DEALER) {
@@ -111,9 +127,32 @@ export class CompaniesService {
       );
     }
 
-    qb.addOrderBy('company.created_at', 'DESC').skip(skip).take(limit);
+    if (query.customerType) {
+      qb.andWhere('company.customerType = :customerType', {
+        customerType: query.customerType,
+      });
+    }
 
-    const [items, total] = await qb.getManyAndCount();
+    if (query.categoryId) {
+      qb.andWhere('company.categoryId = :categoryId', {
+        categoryId: query.categoryId,
+      });
+    }
+
+    if (query.subcategoryId) {
+      qb.andWhere('company.subcategoryId = :subcategoryId', {
+        subcategoryId: query.subcategoryId,
+      });
+    }
+
+    qb.orderBy('company.createdAt', 'DESC').skip(skip).take(limit);
+
+    const [rows, total] = await qb.getManyAndCount();
+    const items = rows.map((company) => ({
+      ...company,
+      categoryName: company.category?.name ?? null,
+      subcategoryName: company.subcategory?.name ?? null,
+    }));
 
     return {
       items,
@@ -154,10 +193,18 @@ export class CompaniesService {
       const dealerCompanyId =
         actor.role === Role.DEALER ? actor.companyId : dto.dealerCompanyId;
 
+      const classification = await this.resolveClassification(manager, {
+        categoryId: dto.categoryId,
+        subcategoryId: dto.subcategoryId,
+      });
+
       const company = manager.create(Company, {
         companyCode,
         name: dto.name,
         companyType: dto.companyType,
+        customerType: dto.customerType,
+        categoryId: classification.categoryId,
+        subcategoryId: classification.subcategoryId,
         isSubAccount: dto.isSubAccount ?? false,
         isDealer: dto.isDealer ?? false,
         parentCompanyId: dto.parentCompanyId,
@@ -228,20 +275,11 @@ export class CompaniesService {
         await manager.save(alerts);
       }
 
-      if (dto.services?.length) {
-        const services = dto.services.map((service) =>
-          manager.create(CompanyService, {
-            companyId: savedCompany.id,
-            serviceId: service.serviceId,
-            isActive: service.isActive ?? true,
-            startDate: service.startDate
-              ? new Date(service.startDate)
-              : undefined,
-            endDate: service.endDate ? new Date(service.endDate) : undefined,
-          }),
-        );
-        await manager.save(services);
-      }
+      await this.saveCompanyServices(
+        manager,
+        savedCompany.id,
+        dto.services ?? [],
+      );
 
       if (dto.iys) {
         await this.saveIysSettings(manager, savedCompany.id, dto.iys);
@@ -336,9 +374,19 @@ export class CompaniesService {
 
       const oldValues = { ...company };
 
+      const classification = await this.resolveClassification(manager, {
+        categoryId: dto.categoryId !== undefined ? dto.categoryId : company.categoryId,
+        subcategoryId:
+          dto.subcategoryId !== undefined ? dto.subcategoryId : company.subcategoryId,
+      });
+
       Object.assign(company, {
         name: dto.name ?? company.name,
         companyType: dto.companyType ?? company.companyType,
+        customerType:
+          dto.customerType !== undefined ? dto.customerType ?? undefined : company.customerType,
+        categoryId: classification.categoryId ?? null,
+        subcategoryId: classification.subcategoryId ?? null,
         isSubAccount: dto.isSubAccount ?? company.isSubAccount,
         isDealer: dto.isDealer ?? company.isDealer,
         parentCompanyId: dto.parentCompanyId ?? company.parentCompanyId,
@@ -350,8 +398,8 @@ export class CompaniesService {
           ? new Date(dto.birthDate)
           : company.birthDate,
         serialNumber: dto.serialNumber ?? company.serialNumber,
-        cityId: dto.cityId ?? company.cityId,
-        districtId: dto.districtId ?? company.districtId,
+        cityId: dto.cityId !== undefined ? dto.cityId ?? null : company.cityId,
+        districtId: dto.districtId !== undefined ? dto.districtId ?? null : company.districtId,
         address: dto.address ?? company.address,
         phone: dto.phone ?? company.phone,
         mobile: dto.mobile ?? company.mobile,
@@ -400,7 +448,10 @@ export class CompaniesService {
             manager,
           );
         }
-        await manager.delete(CompanyOriginator, { companyId: id });
+        await manager.query(
+          `UPDATE company_originators SET sms_account_id = NULL WHERE company_id = $1`,
+          [id],
+        );
         await manager.delete(CompanySmsAccount, { companyId: id });
         savedSmsAccounts = await this.saveSmsAccounts(
           manager,
@@ -410,20 +461,9 @@ export class CompaniesService {
       }
 
       if (dto.originators !== undefined) {
-        if (dto.smsAccounts === undefined) {
-          savedSmsAccounts = await manager.find(CompanySmsAccount, {
-            where: { companyId: id },
-          });
-        }
-        await manager.delete(CompanyOriginator, { companyId: id });
-        if (dto.originators.length) {
-          await this.saveOriginators(
-            manager,
-            id,
-            dto.originators,
-            savedSmsAccounts,
-          );
-        }
+        throw new BadRequestException(
+          'Başlıklar Originatör Yönetimi ekranından yönetilir',
+        );
       }
 
       if (dto.creditAlerts !== undefined) {
@@ -446,22 +486,7 @@ export class CompaniesService {
 
       if (dto.services !== undefined) {
         await manager.delete(CompanyService, { companyId: id });
-        if (dto.services.length) {
-          const services = dto.services.map((service) =>
-            manager.create(CompanyService, {
-              companyId: id,
-              serviceId: service.serviceId,
-              isActive: service.isActive ?? true,
-              startDate: service.startDate
-                ? new Date(service.startDate)
-                : undefined,
-              endDate: service.endDate
-                ? new Date(service.endDate)
-                : undefined,
-            }),
-          );
-          await manager.save(services);
-        }
+        await this.saveCompanyServices(manager, id, dto.services);
       }
 
       if (dto.iys !== undefined) {
@@ -524,6 +549,101 @@ export class CompaniesService {
 
       return this.findOneInTransaction(manager, id);
     });
+  }
+
+  async addService(companyId: string, serviceId: string, actorUserId: string) {
+    return this.dataSource.transaction(async (manager) => {
+      const company = await manager.findOne(Company, { where: { id: companyId } });
+      if (!company) {
+        throw new NotFoundException('Firma bulunamadı');
+      }
+
+      const service = await manager.findOne(Service, { where: { id: serviceId } });
+      if (!service || !service.isActive) {
+        throw new BadRequestException('Hizmet bulunamadı veya pasif');
+      }
+
+      const existing = await manager.findOne(CompanyService, {
+        where: { companyId, serviceId },
+      });
+      if (existing) {
+        throw new BadRequestException('Bu hizmet zaten tanımlı');
+      }
+
+      await manager.save(
+        manager.create(CompanyService, {
+          companyId,
+          serviceId,
+          isActive: true,
+        }),
+      );
+
+      if (service.code === 'AI') {
+        const aiWallet = await manager.findOne(Wallet, {
+          where: { companyId, walletType: WalletType.AI },
+        });
+        if (!aiWallet) {
+          await manager.save(
+            manager.create(Wallet, {
+              companyId,
+              walletType: WalletType.AI,
+              balance: 0,
+            }),
+          );
+        }
+      }
+
+      await this.auditService.log(
+        'UPDATE',
+        'CompanyService',
+        companyId,
+        actorUserId,
+        companyId,
+        null,
+        { serviceId, serviceCode: service.code },
+        undefined,
+        manager,
+      );
+
+      return this.findOneInTransaction(manager, companyId);
+    });
+  }
+
+  async addContact(
+    companyId: string,
+    dto: { name: string; contactType: ContactType; mobile?: string; phone?: string; email?: string; description?: string },
+    actorUserId: string,
+  ) {
+    const company = await this.companyRepository.findOne({ where: { id: companyId } });
+    if (!company) {
+      throw new NotFoundException('Firma bulunamadı');
+    }
+
+    await this.companyRepository.manager.save(
+      this.companyRepository.manager.create(CompanyContact, {
+        companyId,
+        name: dto.name.trim(),
+        contactType: dto.contactType,
+        mobile: dto.mobile || undefined,
+        phone: dto.phone || undefined,
+        email: dto.email || undefined,
+        description: dto.description || undefined,
+        createdBy: actorUserId,
+      }),
+    );
+
+    return this.findOne(companyId);
+  }
+
+  async removeContact(companyId: string, contactId: string) {
+    const contact = await this.companyRepository.manager.findOne(CompanyContact, {
+      where: { id: contactId, companyId },
+    });
+    if (!contact) {
+      throw new NotFoundException('İletişim kişisi bulunamadı');
+    }
+    await this.companyRepository.manager.softDelete(CompanyContact, { id: contactId });
+    return this.findOne(companyId);
   }
 
   async updateStatus(
@@ -642,6 +762,40 @@ export class CompaniesService {
     return prefix + String(maxCode + 1).padStart(5, '0');
   }
 
+  private async saveCompanyServices(
+    manager: EntityManager,
+    companyId: string,
+    extra: CreateCompanyServiceDto[] = [],
+  ) {
+    const smsService = await manager.findOne(Service, {
+      where: { code: SMS_SERVICE_CODE },
+    });
+    if (!smsService) {
+      throw new BadRequestException('SMS servisi katalogda bulunamadı');
+    }
+
+    const extras = extra.filter((service) => service.serviceId !== smsService.id);
+    const rows = [
+      manager.create(CompanyService, {
+        companyId,
+        serviceId: smsService.id,
+        isActive: true,
+      }),
+      ...extras.map((service) =>
+        manager.create(CompanyService, {
+          companyId,
+          serviceId: service.serviceId,
+          isActive: service.isActive ?? true,
+          startDate: service.startDate
+            ? new Date(service.startDate)
+            : undefined,
+          endDate: service.endDate ? new Date(service.endDate) : undefined,
+        }),
+      ),
+    ];
+    await manager.save(rows);
+  }
+
   private async saveSecuritySettings(
     manager: EntityManager,
     companyId: string,
@@ -716,7 +870,11 @@ export class CompaniesService {
     originators: NonNullable<CreateCompanyDto['originators']>,
     smsAccounts: CompanySmsAccount[],
   ) {
-    const entities = originators.map((originator) => {
+    const entities: CompanyOriginator[] = [];
+    const names = originators.map((item) => normalizeOriginatorName(item.name));
+    await this.originatorsService.assertNotBanned(names);
+
+    for (const originator of originators) {
       let smsAccountId = originator.smsAccountId;
       if (
         originator.smsAccountIndex !== undefined &&
@@ -725,15 +883,22 @@ export class CompaniesService {
         smsAccountId = smsAccounts[originator.smsAccountIndex].id;
       }
 
-      return manager.create(CompanyOriginator, {
-        companyId,
-        name: originator.name,
-        smsAccountId,
-        status: originator.status ?? OriginatorStatus.PENDING,
-        providerReference: originator.providerReference,
-      });
-    });
-    await manager.save(entities);
+      const name = normalizeOriginatorName(originator.name);
+      if (!name) continue;
+
+      entities.push(
+        manager.create(CompanyOriginator, {
+          companyId,
+          name,
+          smsAccountId,
+          status: OriginatorStatus.PENDING,
+          providerReference: originator.providerReference,
+        }),
+      );
+    }
+    if (entities.length) {
+      await manager.save(entities);
+    }
   }
 
   private async saveIysSettings(
@@ -761,6 +926,40 @@ export class CompaniesService {
     }
   }
 
+  private async resolveClassification(
+    manager: EntityManager,
+    input: { categoryId?: string | null; subcategoryId?: string | null },
+  ) {
+    let categoryId = input.categoryId || undefined;
+    let subcategoryId = input.subcategoryId || undefined;
+
+    if (subcategoryId) {
+      const subcategory = await manager.findOne(CustomerSubcategory, {
+        where: { id: subcategoryId },
+      });
+      if (!subcategory) {
+        throw new BadRequestException('Alt kategori bulunamadı');
+      }
+      if (categoryId && subcategory.categoryId !== categoryId) {
+        throw new BadRequestException('Alt kategori seçilen ana kategoriye ait değil');
+      }
+      categoryId = subcategory.categoryId;
+    }
+
+    if (categoryId) {
+      const category = await manager.findOne(CustomerCategory, {
+        where: { id: categoryId },
+      });
+      if (!category) {
+        throw new BadRequestException('Ana kategori bulunamadı');
+      }
+    } else {
+      subcategoryId = undefined;
+    }
+
+    return { categoryId, subcategoryId };
+  }
+
   private async findOneInTransaction(manager: EntityManager, id: string) {
     const company = await manager.findOne(Company, {
       where: { id },
@@ -777,13 +976,22 @@ export class CompaniesService {
   private sanitizeCompany(company: Company) {
     const c = company as any;
 
-    const priceAssignment = c.priceListAssignments?.[0];
+    const priceAssignment = [...(c.priceListAssignments ?? [])].sort(
+      (a: { assignedAt: string | Date }, b: { assignedAt: string | Date }) =>
+        new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime(),
+    )[0];
     const wallets: any[] = c.wallets ?? [];
     const smsWallet = wallets.find((w: any) => w.walletType === WalletType.SMS);
     const aiWallet = wallets.find((w: any) => w.walletType === WalletType.AI);
 
     return {
       ...company,
+      parentCompanyName: company.parentCompany?.name ?? null,
+      dealerCompanyName: company.dealerCompany?.name ?? null,
+      cityName: company.city?.name ?? null,
+      districtName: company.district?.name ?? null,
+      categoryName: company.category?.name ?? null,
+      subcategoryName: company.subcategory?.name ?? null,
       priceListId: priceAssignment?.priceListId ?? null,
       priceListName: priceAssignment?.priceList?.name ?? null,
       smsBalance: Number(smsWallet?.balance ?? 0),
@@ -791,6 +999,7 @@ export class CompaniesService {
       services: c.services?.map((s: any) => ({
         serviceId: s.serviceId,
         serviceName: s.service?.name ?? s.serviceId,
+        serviceCode: s.service?.code,
         isActive: s.isActive,
         startDate: s.startDate,
         endDate: s.endDate,

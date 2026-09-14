@@ -9,9 +9,10 @@ import { CompanyWizardData } from "../types";
 interface StepOriginatorsProps {
   data: CompanyWizardData;
   onChange: (data: Partial<CompanyWizardData>) => void;
+  isDealer?: boolean;
 }
 
-export function StepOriginators({ data, onChange }: StepOriginatorsProps) {
+export function StepOriginators({ data, onChange, isDealer }: StepOriginatorsProps) {
   const addOriginator = () => {
     onChange({ originators: [...data.originators, ""] });
   };
@@ -32,6 +33,11 @@ export function StepOriginators({ data, onChange }: StepOriginatorsProps) {
         <div>
           <h3 className="text-sm font-medium text-slate-700">SMS Başlıkları (Originator)</h3>
           <p className="text-sm text-slate-500">Firma adına tanımlanacak SMS başlıklarını ekleyin. Her başlık en fazla 11 karakter olabilir.</p>
+          {isDealer && (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Girdiğiniz başlıklar pasif olarak kaydedilir. Ana bayi onayından sonra aktif edilecektir; onay için ana bayi ile iletişime geçin.
+            </p>
+          )}
         </div>
         <Button type="button" variant="outline" size="sm" onClick={addOriginator}>
           <Plus className="mr-1 h-4 w-4" />

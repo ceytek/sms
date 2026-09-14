@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CompanyWizardData } from "../types";
 import { PriceList, PRICE_LIST_TYPE_LABELS } from "@/modules/pricing";
-import { Service } from "../services/reference.service";
+import { Service, DEFAULT_SERVICE_CODE } from "../services/reference.service";
 
 interface StepPricingServicesProps {
   data: CompanyWizardData;
@@ -29,6 +29,7 @@ export function StepPricing({
   });
 
   const selectedList = priceLists.find((l) => l.id === data.priceListId);
+  const optionalServices = services.filter((s) => s.code !== DEFAULT_SERVICE_CODE);
 
   const toggleService = (serviceId: string) => {
     const enabled = data.enabledServiceIds.includes(serviceId);
@@ -100,16 +101,17 @@ export function StepPricing({
       <div className="space-y-4">
         <h3 className="text-sm font-medium text-slate-700">Hizmet Yetkileri</h3>
         <p className="text-sm text-slate-500">
-          Firmaya tanımlanacak hizmetleri seçin.
+          Firmaya tanımlanacak ek hizmetleri seçin. SMS servisi tüm firmalara
+          varsayılan olarak atanır.
         </p>
 
-        {services.length === 0 ? (
+        {optionalServices.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500">
             Hizmet listesi yüklenemedi.
           </p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {services.map((service) => (
+            {optionalServices.map((service) => (
               <div
                 key={service.id}
                 className="flex items-center justify-between rounded-lg border border-slate-200 p-4"

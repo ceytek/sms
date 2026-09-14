@@ -27,6 +27,25 @@ export interface Service {
   isActive: boolean;
 }
 
+export const DEFAULT_SERVICE_CODE = "SMS";
+
+export interface CustomerCategory {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface CustomerSubcategory {
+  id: string;
+  categoryId: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export interface Product {
   id: string;
   code: string;
@@ -55,5 +74,15 @@ export const referenceService = {
 
   async getProducts(): Promise<Product[]> {
     return apiRequest<Product[]>("reference/products");
+  },
+
+  async getCustomerCategories(): Promise<CustomerCategory[]> {
+    return apiRequest<CustomerCategory[]>("reference/customer-categories");
+  },
+
+  async getCustomerSubcategories(categoryId: string): Promise<CustomerSubcategory[]> {
+    return apiRequest<CustomerSubcategory[]>(
+      `reference/customer-categories/${categoryId}/subcategories`,
+    );
   },
 };

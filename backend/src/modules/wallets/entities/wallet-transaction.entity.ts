@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { TransactionType } from '../../../common/enums/transaction-type.enum.js';
 import { Wallet } from './wallet.entity.js';
+import { PriceList } from '../../pricing/entities/price-list.entity.js';
 
 @Entity('wallet_transactions')
 export class WalletTransaction {
@@ -33,6 +34,12 @@ export class WalletTransaction {
   @Column({ name: 'balance_after', type: 'decimal', precision: 14, scale: 4 })
   balanceAfter: number;
 
+  @Column({ name: 'unit_price', type: 'decimal', precision: 12, scale: 4, nullable: true })
+  unitPrice?: number;
+
+  @Column({ name: 'price_list_id', type: 'uuid', nullable: true })
+  priceListId?: string;
+
   @Column({ type: 'text', nullable: true })
   description?: string;
 
@@ -51,4 +58,8 @@ export class WalletTransaction {
   @ManyToOne(() => Wallet, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'wallet_id' })
   wallet: Wallet;
+
+  @ManyToOne(() => PriceList, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'price_list_id' })
+  priceList?: PriceList;
 }

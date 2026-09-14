@@ -3,8 +3,10 @@ import {
   CompanyDetail,
   CompanyListItem,
   CompanyListQuery,
+  ContactType,
   CreateCompanyDto,
   CreateCompanyResponse,
+  CustomerType,
   PaginatedResponse,
 } from "../types";
 
@@ -14,6 +16,9 @@ export const companyService = {
     if (query.search) params.set("search", query.search);
     if (query.status) params.set("status", query.status);
     if (query.isDealer !== undefined) params.set("isDealer", String(query.isDealer));
+    if (query.customerType) params.set("customerType", query.customerType);
+    if (query.categoryId) params.set("categoryId", query.categoryId);
+    if (query.subcategoryId) params.set("subcategoryId", query.subcategoryId);
     if (query.page) params.set("page", String(query.page));
     if (query.limit) params.set("limit", String(query.limit));
 
@@ -34,10 +39,60 @@ export const companyService = {
     });
   },
 
+  async update(
+    id: string,
+    data: {
+      customerType?: CustomerType | null;
+      categoryId?: string | null;
+      subcategoryId?: string | null;
+      priceListId?: string | null;
+      cityId?: number | null;
+      districtId?: number | null;
+      address?: string;
+      phone?: string;
+      mobile?: string;
+      email?: string;
+    },
+  ): Promise<CompanyDetail> {
+    return apiRequest<CompanyDetail>(`admin/companies/${id}`, {
+      method: "PATCH",
+      body: data,
+    });
+  },
+
   async updateStatus(id: string, status: string): Promise<CompanyDetail> {
     return apiRequest<CompanyDetail>(`admin/companies/${id}/status`, {
       method: "PATCH",
       body: { status },
+    });
+  },
+
+  async addService(id: string, serviceId: string): Promise<CompanyDetail> {
+    return apiRequest<CompanyDetail>(`admin/companies/${id}/services`, {
+      method: "POST",
+      body: { serviceId },
+    });
+  },
+
+  async addContact(
+    id: string,
+    data: {
+      name: string;
+      contactType: ContactType;
+      mobile?: string;
+      phone?: string;
+      email?: string;
+    },
+  ): Promise<CompanyDetail> {
+    return apiRequest<CompanyDetail>(`admin/companies/${id}/contacts`, {
+      method: "POST",
+      body: data,
+    });
+  },
+
+  async removeContact(id: string, contactId: string): Promise<CompanyDetail> {
+    return apiRequest<CompanyDetail>(`admin/companies/${id}/contacts/${contactId}`, {
+      method: "DELETE",
     });
   },
 };

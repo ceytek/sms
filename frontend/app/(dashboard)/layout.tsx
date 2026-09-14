@@ -15,6 +15,8 @@ import {
   Send,
   BarChart3,
   MapPin,
+  Hash,
+  Coins,
   Menu,
   X,
   LogOut,
@@ -81,6 +83,8 @@ export default function DashboardLayout({
   const adminNavItems: NavItem[] = [
     { label: "Dashboard", href: "/admin", icon: <Home className="h-5 w-5" /> },
     { label: "Firma Yönetimi", href: "/admin/companies", icon: <Building2 className="h-5 w-5" /> },
+    { label: "Originatör Yönetimi", href: "/admin/originators", icon: <Hash className="h-5 w-5" /> },
+    { label: "Kredi Yönetimi", href: "/admin/credits", icon: <Coins className="h-5 w-5" /> },
     { label: "Harita", href: "/admin/map", icon: <MapPin className="h-5 w-5" /> },
     { label: "Fiyat Yönetimi", href: "/admin/pricing", icon: <CreditCard className="h-5 w-5" /> },
     { label: "SMS Sağlayıcılar", href: "/admin/providers", icon: <Radio className="h-5 w-5" /> },
@@ -89,6 +93,8 @@ export default function DashboardLayout({
   const dealerNavItems: NavItem[] = [
     { label: "Dashboard", href: "/admin", icon: <Home className="h-5 w-5" /> },
     { label: "Müşteri Yönetimi", href: "/admin/companies", icon: <Building2 className="h-5 w-5" /> },
+    { label: "Originatör Yönetimi", href: "/admin/originators", icon: <Hash className="h-5 w-5" /> },
+    { label: "Kredi Yönetimi", href: "/admin/credits", icon: <Coins className="h-5 w-5" /> },
     { label: "Harita", href: "/admin/map", icon: <MapPin className="h-5 w-5" /> },
     { label: "Fiyat Görüntüleme", href: "/admin/pricing", icon: <CreditCard className="h-5 w-5" /> },
   ];

@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CompanyWizardData, COMPANY_TYPE_LABELS } from "../types";
 import { City, District } from "../services/reference.service";
+import { ClassificationFields } from "./classification-fields";
 
 interface StepCompanyInfoProps {
   data: CompanyWizardData;
@@ -63,6 +64,15 @@ export function StepGeneral({
           />
         </div>
       </div>
+
+      <ClassificationFields
+        value={{
+          customerType: data.customerType,
+          categoryId: data.categoryId,
+          subcategoryId: data.subcategoryId,
+        }}
+        onChange={(patch) => onChange(patch)}
+      />
 
       {/* Tax / Identity Info */}
       {isCorporate ? (
