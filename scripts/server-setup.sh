@@ -34,6 +34,7 @@ chmod +x "$APP_DIR/scripts/deploy.sh"
 if [ ! -f "$APP_DIR/.env" ]; then
   JWT_SECRET="$(openssl rand -hex 32)"
   DATABASE_PASSWORD="$(openssl rand -hex 16)"
+  CREDENTIAL_ENCRYPTION_KEY="$(openssl rand -hex 32)"
   cat > "$APP_DIR/.env" <<EOF
 FRONTEND_URL=${PUBLIC_URL}
 NEXT_PUBLIC_API_URL=${PUBLIC_URL}:3001
@@ -42,6 +43,7 @@ DATABASE_PASSWORD=${DATABASE_PASSWORD}
 DATABASE_NAME=sms_db
 JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRATION=24h
+CREDENTIAL_ENCRYPTION_KEY=${CREDENTIAL_ENCRYPTION_KEY}
 EOF
 fi
 
