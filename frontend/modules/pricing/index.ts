@@ -3,6 +3,7 @@ export type {
   PriceList,
   PriceListItem,
   PriceListType,
+  PriceListAssignment,
   CreatePriceListDto,
   AssignPriceListDto,
   CompanyPriceListAssignment,

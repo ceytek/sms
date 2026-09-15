@@ -7,7 +7,7 @@ const HANDOFF_PREFIX = "impersonate_handoff_";
 
 export interface SessionUser {
   id: string;
-  companyId: string;
+  companyId?: string;
   companyCode: string;
   username: string;
   role: string;
