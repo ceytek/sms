@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Building2, Eye, ChevronDown, Loader2, LogIn, X, Tags } from "lucide-react";
+import { Plus, Search, Building2, Eye, ChevronDown, Loader2, LogIn, X, Tags, Send } from "lucide-react";
 import type { CompanyListItem, CompanyStatus, CustomerType } from "../types";
 import { COMPANY_TYPE_LABELS, COMPANY_STATUS_LABELS, CUSTOMER_TYPE_LABELS } from "../types";
 import { CustomerCategory, CustomerSubcategory, referenceService } from "../services/reference.service";
@@ -201,52 +201,63 @@ export function CompanyList({
             Tüm firmaları görüntüleyin ve yönetin
           </p>
         </div>
-        <div className="relative">
-          {userRole === "DEALER" ? (
-            <Link href="/admin/companies/new?type=customer">
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="mr-2 h-4 w-4" />
-                Yeni Müşteri
-              </Button>
-            </Link>
-          ) : (
-            <>
-              <Button
-                className="bg-blue-600 hover:bg-blue-700"
-                onClick={() => setShowNewMenu(!showNewMenu)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Yeni Firma
-                <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-              {showNewMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowNewMenu(false)}
-                  />
-                  <div className="absolute right-0 z-50 mt-2 w-48 rounded-lg border border-slate-200 bg-white shadow-lg">
-                    <Link
-                      href="/admin/companies/new?type=dealer"
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Link href="/admin/companies/bulk-message">
+            <Button
+              variant="outline"
+              className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            >
+              <Send className="mr-2 h-4 w-4" />
+              Müşterilere Mesaj At
+            </Button>
+          </Link>
+          <div className="relative">
+            {userRole === "DEALER" ? (
+              <Link href="/admin/companies/new?type=customer">
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Yeni Müşteri
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => setShowNewMenu(!showNewMenu)}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Yeni Firma
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+                {showNewMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
                       onClick={() => setShowNewMenu(false)}
-                      className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 rounded-t-lg"
-                    >
-                      <Building2 className="h-4 w-4 text-blue-600" />
-                      Yeni Bayi
-                    </Link>
-                    <Link
-                      href="/admin/companies/new?type=customer"
-                      onClick={() => setShowNewMenu(false)}
-                      className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 rounded-b-lg border-t border-slate-100"
-                    >
-                      <Building2 className="h-4 w-4 text-purple-600" />
-                      Yeni Müşteri
-                    </Link>
-                  </div>
-                </>
-              )}
-            </>
-          )}
+                    />
+                    <div className="absolute right-0 z-50 mt-2 w-48 rounded-lg border border-slate-200 bg-white shadow-lg">
+                      <Link
+                        href="/admin/companies/new?type=dealer"
+                        onClick={() => setShowNewMenu(false)}
+                        className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 rounded-t-lg"
+                      >
+                        <Building2 className="h-4 w-4 text-blue-600" />
+                        Yeni Bayi
+                      </Link>
+                      <Link
+                        href="/admin/companies/new?type=customer"
+                        onClick={() => setShowNewMenu(false)}
+                        className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 rounded-b-lg border-t border-slate-100"
+                      >
+                        <Building2 className="h-4 w-4 text-purple-600" />
+                        Yeni Müşteri
+                      </Link>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 

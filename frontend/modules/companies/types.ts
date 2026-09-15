@@ -113,6 +113,9 @@ export interface CompanyDetail extends CompanyListItem {
   mobile?: string;
   showAnnouncement: boolean;
   documentsCompleted: boolean;
+  documentProcessStatus?: "in_progress" | "completed";
+  documentAvailableCount?: number;
+  documentTotalCount?: number;
   contacts: CompanyContact[];
   smsAccounts: CompanySmsAccount[];
   originators: CompanyOriginator[];

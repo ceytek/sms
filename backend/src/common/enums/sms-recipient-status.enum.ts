@@ -1,0 +1,8 @@
+export enum SmsRecipientStatus {
+  INCLUDED = 'INCLUDED',
+  EXCLUDED = 'EXCLUDED',
+  INVALID = 'INVALID',
+  DUPLICATE = 'DUPLICATE',
+  SENT = 'SENT',
+  FAILED = 'FAILED',
+}

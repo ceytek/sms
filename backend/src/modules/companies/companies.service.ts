@@ -40,6 +40,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { User } from '../auth/entities/user.entity.js';
 import { Role } from '../../common/enums/role.enum.js';
 import { OriginatorsService } from '../originators/originators.service.js';
+import { DocumentsService } from '../documents/documents.service.js';
 import { normalizeOriginatorName } from '../originators/originator-name.js';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -78,6 +79,7 @@ export class CompaniesService {
     private readonly credentialsService: CredentialsService,
     private readonly auditService: AuditService,
     private readonly originatorsService: OriginatorsService,
+    private readonly documentsService: DocumentsService,
   ) {}
 
   async findAll(
@@ -175,7 +177,7 @@ export class CompaniesService {
       throw new NotFoundException('Firma bulunamadı');
     }
 
-    return this.sanitizeCompany(company);
+    return this.withDocumentSummary(this.sanitizeCompany(company));
   }
 
   async create(
@@ -970,7 +972,7 @@ export class CompaniesService {
       throw new NotFoundException('Firma bulunamadı');
     }
 
-    return this.sanitizeCompany(company);
+    return this.withDocumentSummary(this.sanitizeCompany(company));
   }
 
   private sanitizeCompany(company: Company) {
@@ -1011,5 +1013,10 @@ export class CompaniesService {
           : undefined,
       })),
     };
+  }
+
+  private async withDocumentSummary<T extends Record<string, unknown>>(detail: T) {
+    const summary = await this.documentsService.getCompanyDocumentSummary(detail.id as string);
+    return { ...detail, ...summary };
   }
 }

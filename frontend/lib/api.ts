@@ -31,8 +31,47 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'Bir hata oluştu' }));
-    throw new Error(error.message || `HTTP ${response.status}`);
+    const message = Array.isArray(error.message) ? error.message.join(', ') : error.message;
+    throw new Error(message || `HTTP ${response.status}`);
   }
 
   return response.json();
+}
+
+export async function apiUpload<T>(endpoint: string, formData: FormData): Promise<T> {
+  const token = getAccessToken();
+  const response = await fetch(`${API_URL}/${endpoint}`, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Bir hata oluştu' }));
+    const message = Array.isArray(error.message) ? error.message.join(', ') : error.message;
+    throw new Error(message || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function apiBlob(endpoint: string): Promise<Blob> {
+  const token = getAccessToken();
+  const response = await fetch(`${API_URL}/${endpoint}`, {
+    cache: 'no-store',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'Bir hata oluştu' }));
+    const message = Array.isArray(error.message) ? error.message.join(', ') : error.message;
+    throw new Error(message || `HTTP ${response.status}`);
+  }
+
+  return response.blob();
 }

@@ -156,13 +156,28 @@ export function CompanyDetailView({ company: initialCompany }: CompanyDetailView
           value={company.priceListName ?? "Atanmamış"}
           muted={!company.priceListName}
         />
-        <SummaryCard
-          icon={company.documentsCompleted ? <FileCheck className="h-5 w-5" /> : <FileX className="h-5 w-5" />}
-          iconBg={company.documentsCompleted ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-500"}
-          label="Evrak Durumu"
-          value={company.documentsCompleted ? "Tamamlandı" : "Tamamlanmadı"}
-          muted={!company.documentsCompleted}
-        />
+        <Link href={`/admin/companies/${company.id}/documents`} className="block">
+          <SummaryCard
+            icon={
+              company.documentProcessStatus === "completed" || company.documentsCompleted
+                ? <FileCheck className="h-5 w-5" />
+                : <FileX className="h-5 w-5" />
+            }
+            iconBg={
+              company.documentProcessStatus === "completed" || company.documentsCompleted
+                ? "bg-emerald-100 text-emerald-600"
+                : "bg-amber-100 text-amber-600"
+            }
+            label="Evrak Durumu"
+            value={
+              company.documentProcessStatus === "completed" || company.documentsCompleted
+                ? "Tamamlandı"
+                : "Devam Ediyor"
+            }
+            subValue={`${company.documentAvailableCount ?? 0} / ${company.documentTotalCount ?? 0} belge mevcut`}
+            muted={company.documentProcessStatus !== "completed" && !company.documentsCompleted}
+          />
+        </Link>
       </div>
 
       {/* Tab Navigation + Content */}
@@ -221,15 +236,16 @@ export function CompanyDetailView({ company: initialCompany }: CompanyDetailView
 
 /* ──────────────────────────── Summary Card ──────────────────────────── */
 
-function SummaryCard({ icon, iconBg, label, value, muted }: {
+function SummaryCard({ icon, iconBg, label, value, muted, subValue }: {
   icon: React.ReactNode;
   iconBg: string;
   label: string;
   value: string;
   muted?: boolean;
+  subValue?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
       <div className="flex items-center gap-3">
         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>
           {icon}
@@ -237,6 +253,7 @@ function SummaryCard({ icon, iconBg, label, value, muted }: {
         <div className="min-w-0">
           <p className="text-xs text-slate-400">{label}</p>
           <p className={`text-base font-bold truncate ${muted ? "text-slate-400" : "text-slate-900"}`}>{value}</p>
+          {subValue && <p className="text-xs text-slate-500">{subValue}</p>}
         </div>
       </div>
     </div>

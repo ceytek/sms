@@ -17,6 +17,7 @@ import {
   MapPin,
   Hash,
   Coins,
+  FileText,
   Menu,
   X,
   LogOut,
@@ -88,6 +89,7 @@ export default function DashboardLayout({
     { label: "Harita", href: "/admin/map", icon: <MapPin className="h-5 w-5" /> },
     { label: "Fiyat Yönetimi", href: "/admin/pricing", icon: <CreditCard className="h-5 w-5" /> },
     { label: "SMS Sağlayıcılar", href: "/admin/providers", icon: <Radio className="h-5 w-5" /> },
+    { label: "Belge Tanımları", href: "/admin/settings/document-types", icon: <FileText className="h-5 w-5" /> },
   ];
 
   const dealerNavItems: NavItem[] = [

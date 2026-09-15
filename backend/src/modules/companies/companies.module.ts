@@ -19,6 +19,7 @@ import { CredentialsModule } from '../credentials/credentials.module.js';
 import { AuditModule } from '../audit/audit.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { OriginatorsModule } from '../originators/originators.module.js';
+import { DocumentsModule } from '../documents/documents.module.js';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { OriginatorsModule } from '../originators/originators.module.js';
     AuditModule,
     AuthModule,
     OriginatorsModule,
+    DocumentsModule,
   ],
   controllers: [CompaniesController],
   providers: [CompaniesService],

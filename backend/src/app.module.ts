@@ -13,6 +13,8 @@ import { AdsModule } from './modules/ads/ads.module.js';
 import { MapModule } from './modules/map/map.module.js';
 import { OriginatorsModule } from './modules/originators/originators.module.js';
 import { CreditsModule } from './modules/credits/credits.module.js';
+import { MessagingModule } from './modules/messaging/messaging.module.js';
+import { DocumentsModule } from './modules/documents/documents.module.js';
 import { User } from './modules/auth/entities/user.entity.js';
 import { Company } from './modules/companies/entities/company.entity.js';
 import { CompanyContact } from './modules/companies/entities/company-contact.entity.js';
@@ -41,6 +43,13 @@ import { WalletTransaction } from './modules/wallets/entities/wallet-transaction
 import { CompanyCredential } from './modules/credentials/entities/company-credential.entity.js';
 import { AuditLog } from './modules/audit/entities/audit-log.entity.js';
 import { BannedOriginator } from './modules/originators/entities/banned-originator.entity.js';
+import { SmsCampaign } from './modules/messaging/entities/sms-campaign.entity.js';
+import { SmsCampaignSegment } from './modules/messaging/entities/sms-campaign-segment.entity.js';
+import { SmsCampaignRecipient } from './modules/messaging/entities/sms-campaign-recipient.entity.js';
+import { DocumentType } from './modules/documents/entities/document-type.entity.js';
+import { DocumentTypeAssignment } from './modules/documents/entities/document-type-assignment.entity.js';
+import { CompanyDocument } from './modules/documents/entities/company-document.entity.js';
+import { CompanyDocumentProcess } from './modules/documents/entities/company-document-process.entity.js';
 
 const entities = [
   User,
@@ -71,6 +80,13 @@ const entities = [
   CompanyCredential,
   AuditLog,
   BannedOriginator,
+  SmsCampaign,
+  SmsCampaignSegment,
+  SmsCampaignRecipient,
+  DocumentType,
+  DocumentTypeAssignment,
+  CompanyDocument,
+  CompanyDocumentProcess,
 ];
 
 @Module({
@@ -106,6 +122,8 @@ const entities = [
     MapModule,
     OriginatorsModule,
     CreditsModule,
+    MessagingModule,
+    DocumentsModule,
   ],
 })
 export class AppModule {}
