@@ -10,6 +10,7 @@ import type {
   ContactDuplicatePolicy,
   ContactGroupRecord,
   ContactCustomFieldRecord,
+  ContactImportColumnMapping,
   ImportJobRecord,
   ImportPreviewFile,
 } from "../types";
@@ -26,10 +27,19 @@ const FIELD_OPTIONS = [
   { key: "tag", label: "Etiket" },
 ];
 
-function toImportMapping(mapping: Record<string, string>, customMapping: Record<string, string>) {
+function toImportMapping(
+  mapping: Record<string, string>,
+  customMapping: Record<string, string>,
+): ContactImportColumnMapping {
   const customFields = Object.fromEntries(Object.entries(customMapping).filter(([, column]) => column));
   return {
-    ...mapping,
+    mobile: mapping.mobile,
+    firstName: mapping.firstName,
+    lastName: mapping.lastName,
+    email: mapping.email,
+    companyName: mapping.companyName,
+    notes: mapping.notes,
+    tag: mapping.tag,
     ...(Object.keys(customFields).length ? { customFields } : {}),
   };
 }

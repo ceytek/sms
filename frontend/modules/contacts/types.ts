@@ -112,6 +112,17 @@ export interface ImportJobRecord {
   errors?: ImportErrorRow[];
 }
 
+export interface ContactImportColumnMapping {
+  mobile?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  companyName?: string;
+  notes?: string;
+  tag?: string;
+  customFields?: Record<string, string>;
+}
+
 export interface ImportPreviewFile {
   jobId: string;
   fileName: string;

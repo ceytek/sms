@@ -2,6 +2,7 @@ import { apiRequest, apiUpload } from "@/lib/api";
 import type {
   CompanySourceItem,
   ContactDuplicatePolicy,
+  ContactImportColumnMapping,
   ImportJobRecord,
   ImportPreviewFile,
 } from "../types";
@@ -14,13 +15,13 @@ export const contactImportsService = {
   },
   analyze(data: {
     jobId: string;
-    mapping: Record<string, string> & { customFields?: Record<string, string> };
+    mapping: ContactImportColumnMapping;
   }) {
     return apiRequest<ImportJobRecord>("contact-imports/analyze", { method: "POST", body: data });
   },
   commit(data: {
     jobId: string;
-    mapping?: Record<string, string> & { customFields?: Record<string, string> };
+    mapping?: ContactImportColumnMapping;
     duplicatePolicy?: ContactDuplicatePolicy;
     groupIds?: string[];
     tagIds?: string[];
