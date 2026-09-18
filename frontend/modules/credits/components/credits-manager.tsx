@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowUpRight,
   Bot,
@@ -77,11 +78,14 @@ function statusLabel(status: CreditCustomer["status"]) {
 }
 
 export function CreditsManager() {
+  const searchParams = useSearchParams();
+  const initialCompanyId = searchParams.get("companyId");
   const [customers, setCustomers] = useState<CreditCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<CreditCustomer | null>(null);
+  const preselected = useRef(false);
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -90,6 +94,31 @@ export function CreditsManager() {
       const result = await creditsService.listCustomers(search || undefined);
       const items = result.items ?? [];
       setCustomers(items);
+
+      if (initialCompanyId && !preselected.current) {
+        const match = items.find((item) => item.id === initialCompanyId);
+        if (match) {
+          preselected.current = true;
+          setSelected(match);
+          return;
+        }
+        if (!search) {
+          try {
+            const customer = await creditsService.getCustomer(initialCompanyId);
+            preselected.current = true;
+            setSelected(customer);
+            setCustomers((current) =>
+              current.some((item) => item.id === customer.id)
+                ? current
+                : [customer, ...current],
+            );
+            return;
+          } catch {
+            preselected.current = true;
+          }
+        }
+      }
+
       setSelected((current) => {
         if (!current) return current;
         return items.find((item) => item.id === current.id) ?? current;
@@ -100,7 +129,7 @@ export function CreditsManager() {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, initialCompanyId]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {

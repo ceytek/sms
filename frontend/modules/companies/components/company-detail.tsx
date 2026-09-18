@@ -28,6 +28,7 @@ import {
   Send,
   Plus,
   Trash2,
+  Radio,
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import {
@@ -41,9 +42,16 @@ import {
   type ContactType,
 } from "../types";
 import { ClassificationFields } from "./classification-fields";
+import { Switch } from "@/components/ui/switch";
 import { companyService } from "../services/company.service";
-import { referenceService, type City, type District, type Service } from "../services/reference.service";
+import { referenceService, type City, type District, type Service, type SmsProvider } from "../services/reference.service";
 import { PRICE_LIST_TYPE_LABELS, pricingService, type PriceList, type PriceListItem } from "@/modules/pricing";
+import { CreditRefundFields } from "./credit-refund-fields";
+import {
+  displayCreditRefundRate,
+  formatCreditRefundRate,
+  parseCreditRefundRate,
+} from "../utils/credit-refund";
 
 interface CompanyUser {
   id: string;
@@ -402,6 +410,7 @@ function OverviewTab({
           <InfoRow label="Vergi Dairesi" value={company.taxOffice} />
           <InfoRow label="Vergi No" value={company.taxNumber} />
           <InfoRow label="TC Kimlik No" value={company.nationalId} />
+          <InfoRow label="Seri No" value={company.serialNumber} />
           <InfoRow label="Doğum Tarihi" value={company.birthDate} />
           <InfoRow label="Alt Hesap" value={company.isSubAccount} />
           <InfoRow label="Ana Firma" value={company.parentCompanyName} />
@@ -912,6 +921,22 @@ function ServicesTab({
                 <Badge variant="outline" className={service.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}>
                   {service.isActive ? "Aktif" : "Pasif"}
                 </Badge>
+                {service.serviceCode !== "SMS" ? (
+                  <Switch
+                    checked={service.isActive}
+                    disabled={saving}
+                    onCheckedChange={(checked) => {
+                      if (!service.serviceId) return;
+                      setSaving(true);
+                      setError("");
+                      void companyService
+                        .setServiceActive(company.id, service.serviceId, checked)
+                        .then(onUpdated)
+                        .catch((err) => setError(err instanceof Error ? err.message : "Hizmet güncellenemedi"))
+                        .finally(() => setSaving(false));
+                    }}
+                  />
+                ) : null}
               </div>
             ))}
           </div>
@@ -1243,6 +1268,7 @@ function PricingTab({
   };
 
   return (
+    <div className="space-y-4">
     <Section
       title="Fiyat Şablonu"
       action={
@@ -1348,6 +1374,138 @@ function PricingTab({
           )}
         </div>
       )}
+    </Section>
+    <SmsRoutingSection company={company} onUpdated={onUpdated} />
+    </div>
+  );
+}
+
+function primarySmsAccount(company: CompanyDetail) {
+  return company.smsAccounts?.find((account) => account.isActive) ?? company.smsAccounts?.[0];
+}
+
+function SmsRoutingSection({
+  company,
+  onUpdated,
+}: {
+  company: CompanyDetail;
+  onUpdated: (company: CompanyDetail) => void;
+}) {
+  const account = primarySmsAccount(company);
+  const currentProviderId = account?.providerId ?? "";
+  const currentRate =
+    account?.creditRefundRate == null ? null : Number(account.creditRefundRate);
+  const hasRate = currentRate != null && Number.isFinite(currentRate);
+
+  const [providers, setProviders] = useState<SmsProvider[]>([]);
+  const [providerId, setProviderId] = useState(currentProviderId);
+  const [enableRefund, setEnableRefund] = useState(hasRate);
+  const [refundRate, setRefundRate] = useState(hasRate ? formatCreditRefundRate(currentRate) : "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    referenceService
+      .getSmsProviders()
+      .then((items) => setProviders(items.filter((item) => item.isActive)))
+      .catch(() => setProviders([]));
+  }, []);
+
+  useEffect(() => {
+    setProviderId(currentProviderId);
+    setEnableRefund(hasRate);
+    setRefundRate(hasRate ? formatCreditRefundRate(currentRate) : "");
+    setError("");
+  }, [company.id, currentProviderId, hasRate, currentRate]);
+
+  const nextRate = enableRefund ? parseCreditRefundRate(refundRate) : null;
+  const providerDirty = Boolean(providerId) && providerId !== currentProviderId;
+  const refundDirty = enableRefund ? nextRate !== (hasRate ? currentRate : null) : hasRate;
+  const canSave =
+    Boolean(providerId) &&
+    !(enableRefund && nextRate == null) &&
+    (providerDirty || refundDirty);
+
+  const save = async () => {
+    if (!canSave || !providerId) return;
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await companyService.updateSmsProvider(company.id, {
+        providerId,
+        creditRefundRate: enableRefund ? nextRate : null,
+      });
+      onUpdated(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sağlayıcı kaydedilemedi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const currentProviderName =
+    account?.providerName ?? providers.find((item) => item.id === currentProviderId)?.name;
+
+  return (
+    <Section title="SMS Sağlayıcı ve İade">
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+            <Radio className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-slate-400">Şu an atanan</p>
+            <p className="truncate text-sm font-semibold text-slate-900">
+              {currentProviderName || "Atanmamış"}
+            </p>
+            <p className="text-xs text-slate-400">
+              {displayCreditRefundRate(hasRate ? currentRate : null)
+                ? `İade ${displayCreditRefundRate(hasRate ? currentRate : null)}`
+                : "İade oranı yok"}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="smsProviderId">Sağlayıcı</Label>
+          <select
+            id="smsProviderId"
+            value={providerId}
+            onChange={(event) => setProviderId(event.target.value)}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="">Sağlayıcı seçin</option>
+            {providers.map((provider) => (
+              <option key={provider.id} value={provider.id}>
+                {provider.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <CreditRefundFields
+          enabled={enableRefund}
+          rate={refundRate}
+          onEnabledChange={setEnableRefund}
+          onRateChange={setRefundRate}
+        />
+
+        {providerDirty && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+            <p className="text-xs font-medium text-amber-800">Dikkat</p>
+            <p className="mt-1 text-xs leading-5 text-amber-700">
+              Sağlayıcı değişince bu firmanın SMS gönderimleri yeni operatör üzerinden gider.
+              Mevcut hesap bilgileri korunur.
+            </p>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <Button size="sm" disabled={!canSave || saving} onClick={() => void save()}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Kaydet"}
+        </Button>
+      </div>
     </Section>
   );
 }

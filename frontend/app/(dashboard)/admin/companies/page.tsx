@@ -94,6 +94,10 @@ export default function CompaniesPage() {
         onSubcategoryFilter={setSubcategoryIdFilter}
         onStatusToggle={handleStatusToggle}
         onImpersonate={handleImpersonate}
+        onProviderChange={async (id, providerId, creditRefundRate) => {
+          await companyService.updateSmsProvider(id, { providerId, creditRefundRate });
+          await loadCompanies();
+        }}
       />
     </div>
   );

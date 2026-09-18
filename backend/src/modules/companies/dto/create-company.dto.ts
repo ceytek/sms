@@ -11,6 +11,7 @@ import {
   IsString,
   IsUUID,
   Matches,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -72,7 +73,10 @@ export class CreateSmsAccountDto {
   subscriberNo?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
+  @Min(0)
+  @Max(100)
   creditRefundRate?: number;
 
   @IsOptional()

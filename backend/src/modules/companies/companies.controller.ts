@@ -17,7 +17,9 @@ import { CreateCompanyDto } from './dto/create-company.dto.js';
 import { UpdateCompanyDto } from './dto/update-company.dto.js';
 import { CompanyQueryDto } from './dto/company-query.dto.js';
 import { UpdateCompanyStatusDto } from './dto/update-company-status.dto.js';
+import { UpdateCompanySmsProviderDto } from './dto/update-company-sms-provider.dto.js';
 import { AddCompanyServiceDto } from './dto/add-company-service.dto.js';
+import { UpdateCompanyServiceDto } from './dto/update-company-service.dto.js';
 import { CreateContactDto } from './dto/create-company.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
@@ -63,6 +65,21 @@ export class CompaniesController {
     return this.companiesService.update(id, dto, user.id, req.ip);
   }
 
+  @Patch(':id/sms-provider')
+  updateSmsProvider(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCompanySmsProviderDto,
+    @CurrentUser() user: { id: string },
+    @Req() req: Request,
+  ) {
+    return this.companiesService.updateSmsProvider(
+      id,
+      dto,
+      user.id,
+      req.ip,
+    );
+  }
+
   @Patch(':id/status')
   updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
@@ -85,6 +102,16 @@ export class CompaniesController {
     @CurrentUser() user: { id: string },
   ) {
     return this.companiesService.addService(id, dto.serviceId, user.id);
+  }
+
+  @Patch(':id/services/:serviceId')
+  setServiceActive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Body() dto: UpdateCompanyServiceDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.companiesService.setServiceActive(id, serviceId, dto.isActive, user.id);
   }
 
   @Post(':id/contacts')

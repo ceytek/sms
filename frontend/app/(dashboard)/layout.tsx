@@ -23,16 +23,29 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ArrowLeft,
   Loader2,
+  BookUser,
+  History,
+  Tags,
+  Ban,
+  PhoneOff,
+  ListPlus,
+  ShieldCheck,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { HeaderCredits } from "@/modules/credits";
+import { kvkkService } from "@/modules/kvkk";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
   disabled?: boolean;
+  exact?: boolean;
+  children?: NavItem[];
 }
 
 export default function DashboardLayout({
@@ -46,6 +59,8 @@ export default function DashboardLayout({
   const [user, setUser] = useState<User | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [kvkkEnabled, setKvkkEnabled] = useState(false);
+  const [openMenus, setOpenMenus] = useState<string[]>([]);
 
   useEffect(() => {
     recoverLegacyImpersonation();
@@ -56,10 +71,25 @@ export default function DashboardLayout({
     }
     setUser(currentUser);
     setIsLoading(false);
+    if (currentUser.role === "CUSTOMER") {
+      void kvkkService
+        .status()
+        .then((status) => setKvkkEnabled(status.enabled))
+        .catch(() => setKvkkEnabled(false));
+    } else {
+      setKvkkEnabled(false);
+    }
   }, [router, pathname]);
 
   useEffect(() => {
     setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const matched: string[] = [];
+    if (pathname.startsWith("/customer/contacts")) matched.push("Rehber");
+    if (pathname.startsWith("/customer/kvkk")) matched.push("KVKK / İzin Yönetimi");
+    setOpenMenus(matched);
   }, [pathname]);
 
   const handleLogout = () => {
@@ -74,11 +104,12 @@ export default function DashboardLayout({
   const impersonating = authService.isImpersonating();
   const originalUser = impersonating ? authService.getOriginalUser() : null;
 
-  const isActive = (href: string) => {
-    if (href === "/admin") {
-      return pathname === "/admin";
+  const isActive = (href: string, exact = false) => {
+    if (href === "/admin" || href === "/customer") {
+      return pathname === href;
     }
-    return pathname.startsWith(href);
+    if (exact) return pathname === href;
+    return pathname === href || pathname.startsWith(`${href}/`);
   };
 
   const adminNavItems: NavItem[] = [
@@ -101,7 +132,49 @@ export default function DashboardLayout({
     { label: "Fiyat Görüntüleme", href: "/admin/pricing", icon: <CreditCard className="h-5 w-5" /> },
   ];
 
-  const navItems = user?.role === "DEALER" ? dealerNavItems : adminNavItems;
+  const customerNavItems: NavItem[] = [
+    { label: "Dashboard", href: "/customer", icon: <Home className="h-5 w-5" />, exact: true },
+    {
+      label: "Rehber",
+      href: "/customer/contacts",
+      icon: <BookUser className="h-5 w-5" />,
+      children: [
+        { label: "Kişiler", href: "/customer/contacts", icon: <Users className="h-4 w-4" />, exact: true },
+        { label: "Gruplar", href: "/customer/contacts/groups", icon: <Users className="h-4 w-4" /> },
+        { label: "Etiketler", href: "/customer/contacts/tags", icon: <Tags className="h-4 w-4" /> },
+        { label: "Özel Alanlar", href: "/customer/contacts/fields", icon: <ListPlus className="h-4 w-4" /> },
+        { label: "Yasaklı", href: "/customer/contacts/blocked", icon: <Ban className="h-4 w-4" /> },
+        { label: "SMS Gönderilmeyecek", href: "/customer/contacts/sms-blocked", icon: <PhoneOff className="h-4 w-4" /> },
+        { label: "Aktarım Geçmişi", href: "/customer/contacts/imports", icon: <History className="h-4 w-4" /> },
+      ],
+    },
+    ...(kvkkEnabled
+      ? [{
+          label: "KVKK / İzin Yönetimi",
+          href: "/customer/kvkk",
+          icon: <ShieldCheck className="h-5 w-5" />,
+          children: [
+            { label: "Dashboard", href: "/customer/kvkk", icon: <Home className="h-4 w-4" />, exact: true },
+            { label: "İzin Kayıtları", href: "/customer/kvkk/consents", icon: <FileText className="h-4 w-4" /> },
+            { label: "İzin Toplama", href: "/customer/kvkk/collect", icon: <Share2 className="h-4 w-4" /> },
+            { label: "KVKK Formları", href: "/customer/kvkk/consent-forms", icon: <FileText className="h-4 w-4" /> },
+            { label: "KVKK Metinleri", href: "/customer/kvkk/texts", icon: <FileText className="h-4 w-4" /> },
+            { label: "Raporlar", href: "/customer/kvkk/reports", icon: <BarChart3 className="h-4 w-4" /> },
+            { label: "Ayarlar", href: "/customer/kvkk/settings", icon: <FileText className="h-4 w-4" /> },
+          ],
+        } as NavItem]
+      : []),
+    { label: "SMS Gönderimi", href: "#", icon: <Send className="h-5 w-5" />, disabled: true },
+    { label: "Raporlar", href: "#", icon: <BarChart3 className="h-5 w-5" />, disabled: true },
+    { label: "Bakiye", href: "#", icon: <CreditCard className="h-5 w-5" />, disabled: true },
+  ];
+
+  const navItems =
+    user?.role === "CUSTOMER"
+      ? customerNavItems
+      : user?.role === "DEALER"
+        ? dealerNavItems
+        : adminNavItems;
 
   const placeholderItems: NavItem[] =
     user?.role === "ADMIN"
@@ -120,55 +193,12 @@ export default function DashboardLayout({
     );
   }
 
-  if (user?.role === "CUSTOMER") {
-    return (
-      <div className="flex min-h-screen flex-col">
-        {impersonating && (
-          <div className="flex items-center justify-between gap-3 bg-amber-500 px-4 py-2 text-sm text-white">
-            <span>
-              <strong>{originalUser?.username}</strong> olarak{" "}
-              <strong>{user.companyCode}</strong> / {user.username} hesabına giriş yaptınız
-            </span>
-            <button
-              onClick={handleExitImpersonation}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1 font-medium hover:bg-white/30"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Bu Sekmeyi Kapat
-            </button>
-          </div>
-        )}
-        <header className="flex h-16 items-center justify-between border-b bg-white px-4 md:px-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500">
-              <Send className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-lg font-bold text-slate-900">Toplu SMS</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-600">
-              Merhaba, <span className="font-medium">{user.username}</span>
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="text-sm"
-            >
-              <LogOut className="mr-1.5 h-3.5 w-3.5" />
-              {impersonating ? "Bu Hesabı Kapat" : "Çıkış Yap"}
-            </Button>
-          </div>
-        </header>
-        <main className="flex-1 bg-gray-50">{children}</main>
-      </div>
-    );
-  }
-
   const sidebarWidth = collapsed ? "w-16" : "w-60";
 
   const renderNavItem = (item: NavItem) => {
-    const active = !item.disabled && isActive(item.href);
+    const active = !item.disabled && isActive(item.href, item.exact);
+    const hasChildren = Boolean(item.children?.length);
+    const isOpen = hasChildren && openMenus.includes(item.label);
     const baseClasses =
       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors";
     const activeClasses = "bg-slate-800 text-white";
@@ -188,11 +218,47 @@ export default function DashboardLayout({
       );
     }
 
+    const toggleMenu = () => {
+      setOpenMenus((current) =>
+        current.includes(item.label)
+          ? current.filter((label) => label !== item.label)
+          : [...current, item.label],
+      );
+    };
+
     return (
-      <Link key={item.label} href={item.href} className={classes} title={item.label}>
-        {item.icon}
-        {!collapsed && <span>{item.label}</span>}
-      </Link>
+      <div key={item.label}>
+        {hasChildren && !collapsed ? (
+          <button type="button" onClick={toggleMenu} className={`${classes} w-full`} title={item.label}>
+            {item.icon}
+            <span className="flex-1 text-left">{item.label}</span>
+            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+          </button>
+        ) : (
+          <Link href={item.href} className={classes} title={item.label}>
+            {item.icon}
+            {!collapsed && <span>{item.label}</span>}
+          </Link>
+        )}
+        {hasChildren && !collapsed && isOpen && (
+          <div className="mb-1 ml-6 mt-1 flex flex-col gap-0.5">
+            {item.children!.map((child) => {
+              const childActive = isActive(child.href, child.exact);
+              return (
+                <Link
+                  key={child.label}
+                  href={child.href}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                    childActive ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  }`}
+                >
+                  {child.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -308,7 +374,8 @@ export default function DashboardLayout({
             </button>
             <span className="text-lg font-bold text-slate-900 md:hidden">Toplu SMS</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {user?.role === "CUSTOMER" && <HeaderCredits />}
             <span className="hidden sm:inline text-sm text-slate-600">
               Merhaba, <span className="font-medium">{user?.username}</span>
             </span>

@@ -86,18 +86,17 @@ export function StepReview({
         <ReviewRow label="Ana Kategori" value={category?.name} />
         <ReviewRow label="Alt Kategori" value={subcategory?.name} />
         <ReviewRow label="Firma Adı" value={data.name} />
-        {data.companyType === "CORPORATE" ? (
+        {data.companyType === "CORPORATE" && (
           <>
             <ReviewRow label="Vergi Dairesi" value={data.taxOffice} />
             <ReviewRow label="Vergi No" value={data.taxNumber} />
           </>
-        ) : (
-          <>
-            <ReviewRow label="TC Kimlik No" value={data.nationalId} />
-            <ReviewRow label="Doğum Tarihi" value={data.birthDate} />
-            <ReviewRow label="Seri No" value={data.serialNumber} />
-          </>
         )}
+        <ReviewRow label="TC Kimlik No" value={data.nationalId} />
+        {data.companyType !== "CORPORATE" && (
+          <ReviewRow label="Doğum Tarihi" value={data.birthDate} />
+        )}
+        <ReviewRow label="Seri No" value={data.serialNumber} />
       </ReviewSection>
 
       <ReviewSection title="İletişim Bilgileri">
@@ -126,6 +125,14 @@ export function StepReview({
 
       <ReviewSection title="SMS Sağlayıcı">
         <ReviewRow label="Sağlayıcı" value={provider?.name} />
+        <ReviewRow
+          label="İade oranı"
+          value={
+            data.enableCreditRefund && data.creditRefundRate.trim()
+              ? `%${data.creditRefundRate.replace(".", ",")}`
+              : undefined
+          }
+        />
         {validOriginators.length > 0 && (
           <>
             <ReviewRow label="Başlık Sayısı" value={validOriginators.length} />

@@ -28,6 +28,8 @@ export interface CompanyListItem {
   categoryName?: string;
   subcategoryId?: string;
   subcategoryName?: string;
+  smsBalance?: number;
+  smsProviders?: { providerId: string; name: string; creditRefundRate?: number | null }[];
 }
 
 export interface CompanyContact {
@@ -46,7 +48,7 @@ export interface CompanySmsAccount {
   providerName?: string;
   username?: string;
   subscriberNo?: string;
-  creditRefundRate?: number;
+  creditRefundRate?: number | null;
   singleSendLimit?: number;
   applyToSubAccounts: boolean;
   noRouting: boolean;
@@ -279,6 +281,8 @@ export interface CompanyWizardData {
   smsProviderId: string;
   smsUsername: string;
   smsSubscriberNo: string;
+  enableCreditRefund: boolean;
+  creditRefundRate: string;
   originators: string[];
   priceListId: string;
   enabledServiceIds: string[];
@@ -308,6 +312,8 @@ export const defaultWizardData: CompanyWizardData = {
   smsProviderId: "",
   smsUsername: "",
   smsSubscriberNo: "",
+  enableCreditRefund: false,
+  creditRefundRate: "",
   originators: [],
   priceListId: "",
   enabledServiceIds: [],

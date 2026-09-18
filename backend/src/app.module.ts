@@ -15,6 +15,8 @@ import { OriginatorsModule } from './modules/originators/originators.module.js';
 import { CreditsModule } from './modules/credits/credits.module.js';
 import { MessagingModule } from './modules/messaging/messaging.module.js';
 import { DocumentsModule } from './modules/documents/documents.module.js';
+import { ContactsModule } from './modules/contacts/contacts.module.js';
+import { KvkkModule } from './modules/kvkk/kvkk.module.js';
 import { User } from './modules/auth/entities/user.entity.js';
 import { Company } from './modules/companies/entities/company.entity.js';
 import { CompanyContact } from './modules/companies/entities/company-contact.entity.js';
@@ -50,6 +52,13 @@ import { DocumentType } from './modules/documents/entities/document-type.entity.
 import { DocumentTypeAssignment } from './modules/documents/entities/document-type-assignment.entity.js';
 import { CompanyDocument } from './modules/documents/entities/company-document.entity.js';
 import { CompanyDocumentProcess } from './modules/documents/entities/company-document-process.entity.js';
+import { Contact } from './modules/contacts/entities/contact.entity.js';
+import { ContactGroup } from './modules/contacts/entities/contact-group.entity.js';
+import { ContactGroupMember } from './modules/contacts/entities/contact-group-member.entity.js';
+import { ContactTag } from './modules/contacts/entities/contact-tag.entity.js';
+import { ContactTagMember } from './modules/contacts/entities/contact-tag-member.entity.js';
+import { ContactImportJob } from './modules/contacts/entities/contact-import-job.entity.js';
+import { ContactImportError } from './modules/contacts/entities/contact-import-error.entity.js';
 
 const entities = [
   User,
@@ -87,6 +96,13 @@ const entities = [
   DocumentTypeAssignment,
   CompanyDocument,
   CompanyDocumentProcess,
+  Contact,
+  ContactGroup,
+  ContactGroupMember,
+  ContactTag,
+  ContactTagMember,
+  ContactImportJob,
+  ContactImportError,
 ];
 
 @Module({
@@ -124,6 +140,8 @@ const entities = [
     CreditsModule,
     MessagingModule,
     DocumentsModule,
+    ContactsModule,
+    KvkkModule,
   ],
 })
 export class AppModule {}

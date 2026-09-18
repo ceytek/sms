@@ -26,6 +26,7 @@ import {
 } from "@/modules/companies";
 import { GeneratedCredentials, WizardContact } from "@/modules/companies/types";
 import { buildCreateCompanyPayload } from "@/modules/companies/utils/build-create-payload";
+import { parseCreditRefundRate } from "@/modules/companies/utils/credit-refund";
 import { pricingService, PriceList } from "@/modules/pricing";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Check, Copy } from "lucide-react";
@@ -40,6 +41,7 @@ export default function NewCompanyPage() {
   const isDealer = user?.role === "DEALER";
 
   const [step, setStep] = useState(1);
+  const [unlockedStep, setUnlockedStep] = useState(1);
   const [data, setData] = useState<CompanyWizardData>({
     ...defaultWizardData,
     accountType: isDealer
@@ -134,7 +136,9 @@ export default function NewCompanyPage() {
       case 2:
         return true;
       case 3:
-        return data.smsProviderId.length > 0;
+        if (!data.smsProviderId) return false;
+        if (!data.enableCreditRefund) return true;
+        return parseCreditRefundRate(data.creditRefundRate) != null;
       case 4:
         return true;
       case 5:
@@ -201,8 +205,16 @@ export default function NewCompanyPage() {
 
       <WizardShell
         currentStep={step}
-        onNext={() => setStep((s) => Math.min(s + 1, TOTAL_STEPS))}
+        unlockedStep={unlockedStep}
+        onNext={() => {
+          const next = Math.min(step + 1, TOTAL_STEPS);
+          setStep(next);
+          setUnlockedStep((current) => Math.max(current, next));
+        }}
         onBack={() => setStep((s) => Math.max(s - 1, 1))}
+        onStepSelect={(target) => {
+          if (target <= unlockedStep) setStep(target);
+        }}
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
         canProceed={canProceed()}

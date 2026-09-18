@@ -75,7 +75,7 @@ export function StepGeneral({
       />
 
       {/* Tax / Identity Info */}
-      {isCorporate ? (
+      {isCorporate && (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="taxOffice">Vergi Dairesi</Label>
@@ -103,24 +103,26 @@ export function StepGeneral({
             )}
           </div>
         </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-2">
-            <Label htmlFor="nationalId">TC Kimlik No</Label>
-            <Input
-              id="nationalId"
-              value={data.nationalId}
-              onChange={(e) => {
-                const value = e.target.value.replace(/\D/g, "");
-                onChange({ nationalId: value });
-              }}
-              placeholder="11 haneli TC"
-              maxLength={11}
-            />
-            {data.nationalId && data.nationalId.length !== 11 && (
-              <p className="text-xs text-red-500">TC Kimlik No 11 haneli olmalıdır</p>
-            )}
-          </div>
+      )}
+
+      <div className={`grid gap-4 ${isCorporate ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+        <div className="space-y-2">
+          <Label htmlFor="nationalId">TC Kimlik No</Label>
+          <Input
+            id="nationalId"
+            value={data.nationalId}
+            onChange={(e) => {
+              const value = e.target.value.replace(/\D/g, "");
+              onChange({ nationalId: value });
+            }}
+            placeholder="11 haneli TC"
+            maxLength={11}
+          />
+          {data.nationalId && data.nationalId.length !== 11 && (
+            <p className="text-xs text-red-500">TC Kimlik No 11 haneli olmalıdır</p>
+          )}
+        </div>
+        {!isCorporate && (
           <div className="space-y-2">
             <Label htmlFor="birthDate">Doğum Tarihi</Label>
             <Input
@@ -130,17 +132,17 @@ export function StepGeneral({
               onChange={(e) => onChange({ birthDate: e.target.value })}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="serialNumber">Seri No</Label>
-            <Input
-              id="serialNumber"
-              value={data.serialNumber}
-              onChange={(e) => onChange({ serialNumber: e.target.value })}
-              placeholder="Kimlik seri no"
-            />
-          </div>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="serialNumber">Seri No</Label>
+          <Input
+            id="serialNumber"
+            value={data.serialNumber}
+            onChange={(e) => onChange({ serialNumber: e.target.value })}
+            placeholder="Kimlik seri no"
+          />
         </div>
-      )}
+      </div>
 
       {/* Address Section */}
       <div className="space-y-4 rounded-lg border border-slate-100 bg-slate-50/50 p-4">

@@ -1,4 +1,5 @@
 import { CompanyWizardData, CreateCompanyDto } from "../types";
+import { parseCreditRefundRate } from "./credit-refund";
 
 export function buildCreateCompanyPayload(data: CompanyWizardData): CreateCompanyDto {
   const payload: CreateCompanyDto = {
@@ -29,6 +30,12 @@ export function buildCreateCompanyPayload(data: CompanyWizardData): CreateCompan
       applyToSubAccounts: false,
       noRouting: false,
     }];
+    if (data.enableCreditRefund) {
+      const refundRate = parseCreditRefundRate(data.creditRefundRate);
+      if (refundRate != null) {
+        payload.smsAccounts[0].creditRefundRate = refundRate;
+      }
+    }
   }
 
   const validOriginators = data.originators

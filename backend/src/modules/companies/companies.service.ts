@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { Company } from './entities/company.entity.js';
 import { CompanyContact } from './entities/company-contact.entity.js';
 import { CompanyNote } from './entities/company-note.entity.js';
@@ -18,6 +18,7 @@ import { CompanyService } from './entities/company-service.entity.js';
 import { CompanyIysSettings } from './entities/company-iys-settings.entity.js';
 import { CompanyPriceList } from './entities/company-price-list.entity.js';
 import { Service } from '../reference/entities/service.entity.js';
+import { SmsProvider } from '../reference/entities/sms-provider.entity.js';
 import { CustomerCategory } from '../reference/entities/customer-category.entity.js';
 import { CustomerSubcategory } from '../reference/entities/customer-subcategory.entity.js';
 import { Wallet } from '../wallets/entities/wallet.entity.js';
@@ -150,10 +151,15 @@ export class CompaniesService {
     qb.orderBy('company.createdAt', 'DESC').skip(skip).take(limit);
 
     const [rows, total] = await qb.getManyAndCount();
+    const companyIds = rows.map((company) => company.id);
+    const smsBalances = await this.loadSmsBalances(companyIds);
+    const smsProviders = await this.loadSmsProviders(companyIds);
     const items = rows.map((company) => ({
       ...company,
       categoryName: company.category?.name ?? null,
       subcategoryName: company.subcategory?.name ?? null,
+      smsBalance: smsBalances.get(company.id) ?? 0,
+      smsProviders: smsProviders.get(company.id) ?? [],
     }));
 
     return {
@@ -611,6 +617,34 @@ export class CompaniesService {
     });
   }
 
+  async setServiceActive(companyId: string, serviceId: string, isActive: boolean, actorUserId: string) {
+    return this.dataSource.transaction(async (manager) => {
+      const service = await manager.findOne(Service, { where: { id: serviceId } });
+      if (!service) throw new NotFoundException('Hizmet bulunamadı');
+      if (service.code === SMS_SERVICE_CODE) {
+        throw new BadRequestException('SMS hizmeti kapatılamaz');
+      }
+      const existing = await manager.findOne(CompanyService, { where: { companyId, serviceId } });
+      if (!existing) {
+        throw new NotFoundException('Bu hizmet firmaya tanımlı değil');
+      }
+      existing.isActive = isActive;
+      await manager.save(existing);
+      await this.auditService.log(
+        'UPDATE',
+        'CompanyService',
+        companyId,
+        actorUserId,
+        companyId,
+        null,
+        { serviceId, serviceCode: service.code, isActive },
+        undefined,
+        manager,
+      );
+      return this.findOneInTransaction(manager, companyId);
+    });
+  }
+
   async addContact(
     companyId: string,
     dto: { name: string; contactType: ContactType; mobile?: string; phone?: string; email?: string; description?: string },
@@ -682,6 +716,74 @@ export class CompaniesService {
     );
 
     return this.findOne(id);
+  }
+
+  async updateSmsProvider(
+    id: string,
+    dto: { providerId: string; creditRefundRate?: number | null },
+    actorUserId: string,
+    ipAddress?: string,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const company = await manager.findOne(Company, { where: { id } });
+      if (!company) {
+        throw new NotFoundException('Firma bulunamadı');
+      }
+
+      const provider = await manager.findOne(SmsProvider, { where: { id: dto.providerId } });
+      if (!provider || !provider.isActive) {
+        throw new BadRequestException('Sağlayıcı bulunamadı veya pasif');
+      }
+
+      const accounts = await manager.find(CompanySmsAccount, {
+        where: { companyId: id },
+      });
+      const previousProviderIds = [
+        ...new Set(accounts.map((account) => account.providerId)),
+      ];
+      const previousRates = accounts.map((account) =>
+        account.creditRefundRate == null ? null : Number(account.creditRefundRate),
+      );
+
+      const applyRefundRate = (account: CompanySmsAccount) => {
+        if (dto.creditRefundRate === undefined) return;
+        Object.assign(account, { creditRefundRate: dto.creditRefundRate });
+      };
+
+      if (!accounts.length) {
+        const created = manager.create(CompanySmsAccount, {
+          companyId: id,
+          providerId: dto.providerId,
+          isActive: true,
+          creditRefundRate: dto.creditRefundRate ?? undefined,
+        });
+        await manager.save(created);
+      } else {
+        for (const account of accounts) {
+          account.providerId = dto.providerId;
+          applyRefundRate(account);
+        }
+        await manager.save(accounts);
+      }
+
+      await this.auditService.log(
+        'UPDATE',
+        'CompanySmsAccount',
+        id,
+        actorUserId,
+        id,
+        { providerIds: previousProviderIds, creditRefundRates: previousRates },
+        {
+          providerId: dto.providerId,
+          providerName: provider.name,
+          creditRefundRate: dto.creditRefundRate,
+        },
+        ipAddress,
+        manager,
+      );
+
+      return this.findOneInTransaction(manager, id);
+    });
   }
 
   async findCompanyUsers(companyId: string) {
@@ -962,6 +1064,49 @@ export class CompaniesService {
     return { categoryId, subcategoryId };
   }
 
+  private async loadSmsBalances(companyIds: string[]) {
+    const balances = new Map<string, number>();
+    if (!companyIds.length) return balances;
+
+    const wallets = await this.dataSource.getRepository(Wallet).find({
+      where: { companyId: In(companyIds), walletType: WalletType.SMS },
+      select: ['id', 'companyId', 'balance'],
+    });
+
+    for (const wallet of wallets) {
+      balances.set(wallet.companyId, Number(wallet.balance ?? 0));
+    }
+    return balances;
+  }
+
+  private async loadSmsProviders(companyIds: string[]) {
+    const providers = new Map<
+      string,
+      { providerId: string; name: string; creditRefundRate: number | null }[]
+    >();
+    if (!companyIds.length) return providers;
+
+    const accounts = await this.dataSource.getRepository(CompanySmsAccount).find({
+      where: { companyId: In(companyIds), isActive: true },
+      relations: ['provider'],
+      order: { createdAt: 'ASC' },
+    });
+
+    for (const account of accounts) {
+      const current = providers.get(account.companyId) ?? [];
+      if (!current.some((item) => item.providerId === account.providerId)) {
+        current.push({
+          providerId: account.providerId,
+          name: account.provider?.name ?? account.providerId,
+          creditRefundRate:
+            account.creditRefundRate == null ? null : Number(account.creditRefundRate),
+        });
+      }
+      providers.set(account.companyId, current);
+    }
+    return providers;
+  }
+
   private async findOneInTransaction(manager: EntityManager, id: string) {
     const company = await manager.findOne(Company, {
       where: { id },
@@ -998,6 +1143,12 @@ export class CompaniesService {
       priceListName: priceAssignment?.priceList?.name ?? null,
       smsBalance: Number(smsWallet?.balance ?? 0),
       aiBalance: Number(aiWallet?.balance ?? 0),
+      smsAccounts: (company.smsAccounts ?? []).map((account) => ({
+        ...account,
+        providerName: account.provider?.name ?? null,
+        creditRefundRate:
+          account.creditRefundRate == null ? null : Number(account.creditRefundRate),
+      })),
       services: c.services?.map((s: any) => ({
         serviceId: s.serviceId,
         serviceName: s.service?.name ?? s.serviceId,

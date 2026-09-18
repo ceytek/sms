@@ -67,10 +67,27 @@ export const companyService = {
     });
   },
 
+  async updateSmsProvider(
+    id: string,
+    data: { providerId: string; creditRefundRate?: number | null },
+  ): Promise<CompanyDetail> {
+    return apiRequest<CompanyDetail>(`admin/companies/${id}/sms-provider`, {
+      method: "PATCH",
+      body: data,
+    });
+  },
+
   async addService(id: string, serviceId: string): Promise<CompanyDetail> {
     return apiRequest<CompanyDetail>(`admin/companies/${id}/services`, {
       method: "POST",
       body: { serviceId },
+    });
+  },
+
+  async setServiceActive(id: string, serviceId: string, isActive: boolean): Promise<CompanyDetail> {
+    return apiRequest<CompanyDetail>(`admin/companies/${id}/services/${serviceId}`, {
+      method: "PATCH",
+      body: { isActive },
     });
   },
 

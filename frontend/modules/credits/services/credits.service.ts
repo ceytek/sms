@@ -17,6 +17,10 @@ export const creditsService = {
     return apiRequest<CreditCustomer>(`admin/credits/customers/${id}`);
   },
 
+  me() {
+    return apiRequest<CreditCustomer>("credits/me");
+  },
+
   history(companyId: string, walletType: WalletType, period?: HistoryPeriod) {
     const params = new URLSearchParams({ walletType });
     if (period) params.set("period", period);

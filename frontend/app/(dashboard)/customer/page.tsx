@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { authService } from "@/modules/auth";
 import {
   Send,
@@ -41,11 +42,13 @@ export default function CustomerDashboard() {
           title="SMS Gönderimi"
           description="Yakında aktif olacak"
         />
-        <PlaceholderCard
-          icon={<Users className="h-6 w-6 text-emerald-500" />}
-          title="Rehber"
-          description="Yakında aktif olacak"
-        />
+        <Link href="/customer/contacts">
+          <PlaceholderCard
+            icon={<Users className="h-6 w-6 text-emerald-500" />}
+            title="Rehber"
+            description="Kişileri ve grupları yönetin"
+          />
+        </Link>
         <PlaceholderCard
           icon={<BarChart3 className="h-6 w-6 text-orange-500" />}
           title="Raporlar"

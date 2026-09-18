@@ -65,6 +65,24 @@ export class CreditsService {
     return this.toCustomer(company);
   }
 
+  async findMine(actor: Actor) {
+    if (!actor.companyId) {
+      throw new ForbiddenException();
+    }
+    const company = await this.companyRepository
+      .createQueryBuilder('company')
+      .leftJoinAndSelect('company.wallets', 'wallet')
+      .leftJoinAndSelect('company.services', 'companyService')
+      .leftJoinAndSelect('companyService.service', 'service')
+      .where('company.id = :companyId', { companyId: actor.companyId })
+      .andWhere('company.deletedAt IS NULL')
+      .getOne();
+    if (!company) {
+      throw new NotFoundException('Firma bulunamadı');
+    }
+    return this.toCustomer(company);
+  }
+
   async findHistory(companyId: string, query: CreditHistoryQueryDto, actor: Actor) {
     await this.getScopedCustomer(companyId, actor);
 

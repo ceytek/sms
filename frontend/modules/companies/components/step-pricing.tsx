@@ -101,8 +101,8 @@ export function StepPricing({
       <div className="space-y-4">
         <h3 className="text-sm font-medium text-slate-700">Hizmet Yetkileri</h3>
         <p className="text-sm text-slate-500">
-          Firmaya tanımlanacak ek hizmetleri seçin. SMS servisi tüm firmalara
-          varsayılan olarak atanır.
+          Firmaya tanımlanacak ek hizmetleri seçin. SMS tüm firmalarda zorunlu ve kapatılamaz.
+          KVKK / İzin Yönetimi isteğe bağlıdır.
         </p>
 
         {optionalServices.length === 0 ? (

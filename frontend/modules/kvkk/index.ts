@@ -1,0 +1,14 @@
+export { kvkkService, loadPublicForm, submitPublicForm } from "./services/kvkk.service";
+export { KvkkDashboardPage } from "./components/dashboard-page";
+export { KvkkConsentsPage } from "./components/consents-page";
+export { KvkkConsentDetailPage } from "./components/consent-detail-page";
+export { KvkkOtpPage } from "./components/otp-page";
+export { KvkkFormsPage } from "./components/forms-page";
+export { KvkkFormEditorPage } from "./components/form-editor-page";
+export { KvkkFormLinkPage } from "./components/form-link-page";
+export { KvkkQrPage } from "./components/qr-page";
+export { KvkkCollectPage } from "./components/collect-page";
+export { KvkkTextsPage } from "./components/texts-page";
+export { KvkkTextEditorPage } from "./components/text-editor-page";
+export { KvkkSettingsPage } from "./components/settings-page";
+export { KvkkPublicFormPage } from "./components/public-form-page";

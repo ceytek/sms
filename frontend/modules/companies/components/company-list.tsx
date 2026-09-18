@@ -13,10 +13,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, Building2, Eye, ChevronDown, Loader2, LogIn, X, Tags, Send } from "lucide-react";
+import { Plus, Search, Building2, Eye, ChevronDown, Loader2, LogIn, X, Tags, Send, Radio } from "lucide-react";
 import type { CompanyListItem, CompanyStatus, CustomerType } from "../types";
 import { COMPANY_TYPE_LABELS, COMPANY_STATUS_LABELS, CUSTOMER_TYPE_LABELS } from "../types";
-import { CustomerCategory, CustomerSubcategory, referenceService } from "../services/reference.service";
+import { CustomerCategory, CustomerSubcategory, SmsProvider, referenceService } from "../services/reference.service";
+import { CreditRefundFields } from "./credit-refund-fields";
+import {
+  displayCreditRefundRate,
+  formatCreditRefundRate,
+  parseCreditRefundRate,
+} from "../utils/credit-refund";
 
 interface CompanyListProps {
   companies: CompanyListItem[];
@@ -33,6 +39,11 @@ interface CompanyListProps {
   onSubcategoryFilter?: (subcategoryId: string) => void;
   onStatusToggle?: (id: string, newStatus: CompanyStatus) => Promise<void>;
   onImpersonate?: (companyId: string) => Promise<void> | void;
+  onProviderChange?: (
+    id: string,
+    providerId: string,
+    creditRefundRate: number | null,
+  ) => Promise<void>;
 }
 
 function AccountTypeBadge({ isDealer }: { isDealer: boolean }) {
@@ -65,6 +76,7 @@ export function CompanyList({
   onSubcategoryFilter,
   onStatusToggle,
   onImpersonate,
+  onProviderChange,
 }: CompanyListProps) {
   const [searchValue, setSearchValue] = useState("");
   const [showNewMenu, setShowNewMenu] = useState(false);
@@ -75,12 +87,29 @@ export function CompanyList({
   const [impersonateError, setImpersonateError] = useState("");
   const [categories, setCategories] = useState<CustomerCategory[]>([]);
   const [subcategories, setSubcategories] = useState<CustomerSubcategory[]>([]);
+  const [providers, setProviders] = useState<SmsProvider[]>([]);
+  const [providerDialog, setProviderDialog] = useState<{
+    id: string;
+    name: string;
+    currentProviderId: string;
+    currentName: string;
+    currentRefundRate: number | null;
+  } | null>(null);
+  const [selectedProviderId, setSelectedProviderId] = useState("");
+  const [enableRefund, setEnableRefund] = useState(false);
+  const [refundRate, setRefundRate] = useState("");
+  const [savingProvider, setSavingProvider] = useState(false);
+  const [providerError, setProviderError] = useState("");
 
   useEffect(() => {
     referenceService
       .getCustomerCategories()
       .then(setCategories)
       .catch(() => setCategories([]));
+    referenceService
+      .getSmsProviders()
+      .then((items) => setProviders(items.filter((item) => item.isActive)))
+      .catch(() => setProviders([]));
   }, []);
 
   useEffect(() => {
@@ -126,6 +155,70 @@ export function CompanyList({
       setToggling(false);
     }
   };
+
+  const openProviderDialog = (company: CompanyListItem) => {
+    const current = company.smsProviders?.[0];
+    const currentRefundRate =
+      current?.creditRefundRate == null ? null : Number(current.creditRefundRate);
+    const hasRate = currentRefundRate != null && Number.isFinite(currentRefundRate);
+    setProviderError("");
+    setSelectedProviderId(current?.providerId ?? "");
+    setEnableRefund(hasRate);
+    setRefundRate(hasRate ? formatCreditRefundRate(currentRefundRate) : "");
+    setProviderDialog({
+      id: company.id,
+      name: company.name,
+      currentProviderId: current?.providerId ?? "",
+      currentName: company.smsProviders?.map((item) => item.name).join(", ") || "Atanmadı",
+      currentRefundRate: hasRate ? currentRefundRate : null,
+    });
+  };
+
+  const confirmProviderChange = async () => {
+    if (!providerDialog || !onProviderChange || !selectedProviderId) return;
+    const nextRate = enableRefund ? parseCreditRefundRate(refundRate) : null;
+    if (enableRefund && nextRate == null) {
+      setProviderError("İade oranı 0 ile 100 arasında olmalıdır");
+      return;
+    }
+
+    const providerChanged = selectedProviderId !== providerDialog.currentProviderId;
+    const refundChanged = enableRefund
+      ? nextRate !== providerDialog.currentRefundRate
+      : providerDialog.currentRefundRate != null;
+    if (!providerChanged && !refundChanged) {
+      setProviderDialog(null);
+      return;
+    }
+
+    setSavingProvider(true);
+    setProviderError("");
+    try {
+      await onProviderChange(providerDialog.id, selectedProviderId, nextRate);
+      setProviderDialog(null);
+    } catch (err) {
+      setProviderError(err instanceof Error ? err.message : "Sağlayıcı değiştirilemedi");
+    } finally {
+      setSavingProvider(false);
+    }
+  };
+
+  const nextRefundRate = enableRefund ? parseCreditRefundRate(refundRate) : null;
+  const providerDirty = Boolean(
+    providerDialog &&
+      selectedProviderId &&
+      selectedProviderId !== providerDialog.currentProviderId,
+  );
+  const refundDirty = Boolean(
+    providerDialog &&
+      (enableRefund
+        ? nextRefundRate !== providerDialog.currentRefundRate
+        : providerDialog.currentRefundRate != null),
+  );
+  const providerCanSave =
+    Boolean(selectedProviderId) &&
+    !(enableRefund && nextRefundRate == null) &&
+    (providerDirty || refundDirty);
 
   return (
     <div className="space-y-6">
@@ -188,6 +281,83 @@ export function CompanyList({
               >
                 {toggling && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                 {confirmDialog.newStatus === "PASSIVE" ? "Pasife Al" : "Aktife Al"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {providerDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100">
+                <Radio className="h-5 w-5 text-amber-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Sağlayıcı ve İade Oranı</h3>
+                <p className="text-sm text-slate-500">{providerDialog.name}</p>
+              </div>
+            </div>
+
+            <div className="mb-4 space-y-2">
+              <p className="text-xs font-medium text-slate-500">Mevcut sağlayıcı</p>
+              <p className="text-sm font-semibold text-slate-800">{providerDialog.currentName}</p>
+              <select
+                value={selectedProviderId}
+                onChange={(e) => setSelectedProviderId(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">Sağlayıcı seçin</option>
+                {providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <CreditRefundFields
+                enabled={enableRefund}
+                rate={refundRate}
+                onEnabledChange={setEnableRefund}
+                onRateChange={setRefundRate}
+              />
+            </div>
+
+            {providerDirty && (
+              <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+                <p className="text-xs font-medium text-amber-800">Dikkat</p>
+                <p className="mt-1 text-xs leading-5 text-amber-700">
+                  Sağlayıcı değişince bu firmanın SMS gönderimleri yeni operatör üzerinden gider.
+                  Mevcut hesap bilgileri korunur. Bu işlem geri alınması zor olabilir.
+                </p>
+              </div>
+            )}
+
+            {providerError && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                {providerError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl"
+                onClick={() => setProviderDialog(null)}
+                disabled={savingProvider}
+              >
+                İptal
+              </Button>
+              <Button
+                className="flex-1 rounded-xl bg-amber-600 text-white hover:bg-amber-700"
+                onClick={confirmProviderChange}
+                disabled={savingProvider || !providerCanSave}
+              >
+                {savingProvider && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Değiştir
               </Button>
             </div>
           </div>
@@ -391,6 +561,8 @@ export function CompanyList({
               <TableHead>Kategori</TableHead>
               <TableHead>Tip</TableHead>
               <TableHead>Hesap Türü</TableHead>
+              <TableHead className="text-right">Kontör</TableHead>
+              <TableHead>Sağlayıcı</TableHead>
               <TableHead>Durum</TableHead>
               <TableHead className="text-right">İşlem</TableHead>
             </TableRow>
@@ -398,13 +570,13 @@ export function CompanyList({
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center text-slate-500">
+                <TableCell colSpan={9} className="py-12 text-center text-slate-500">
                   Yükleniyor...
                 </TableCell>
               </TableRow>
             ) : companies.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center">
+                <TableCell colSpan={9} className="py-12 text-center">
                   <Building2 className="mx-auto mb-3 h-10 w-10 text-slate-300" />
                   <p className="text-slate-500">Firma bulunamadı</p>
                   <Link href="/admin/companies/new">
@@ -444,6 +616,38 @@ export function CompanyList({
                   </TableCell>
                   <TableCell>
                     <AccountTypeBadge isDealer={company.isDealer} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Link
+                      href={`/admin/credits?companyId=${company.id}`}
+                      title="Kontör yükle"
+                      className={`inline-flex rounded-md px-1.5 py-0.5 text-sm font-semibold tabular-nums hover:underline ${
+                        Number(company.smsBalance ?? 0) < 500
+                          ? "text-red-600 hover:text-red-700"
+                          : "text-slate-800 hover:text-blue-700"
+                      }`}
+                    >
+                      {Number(company.smsBalance ?? 0).toLocaleString("tr-TR")}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      type="button"
+                      onClick={() => openProviderDialog(company)}
+                      title="Sağlayıcıyı ve iade oranını değiştir"
+                      className="max-w-[180px] text-left"
+                    >
+                      <span className="block truncate text-sm font-medium text-blue-700 hover:underline">
+                        {company.smsProviders?.length
+                          ? company.smsProviders.map((item) => item.name).join(", ")
+                          : "Atanmadı"}
+                      </span>
+                      <span className="block text-xs text-slate-400">
+                        {displayCreditRefundRate(company.smsProviders?.[0]?.creditRefundRate)
+                          ? `İade ${displayCreditRefundRate(company.smsProviders?.[0]?.creditRefundRate)}`
+                          : "İade yok"}
+                      </span>
+                    </button>
                   </TableCell>
                   <TableCell>
                     {/* Status Switch */}

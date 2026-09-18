@@ -16,8 +16,10 @@ const STEPS = [
 
 interface WizardShellProps {
   currentStep: number;
+  unlockedStep: number;
   onNext: () => void;
   onBack: () => void;
+  onStepSelect: (step: number) => void;
   onSubmit: () => void;
   isSubmitting?: boolean;
   canProceed?: boolean;
@@ -26,8 +28,10 @@ interface WizardShellProps {
 
 export function WizardShell({
   currentStep,
+  unlockedStep,
   onNext,
   onBack,
+  onStepSelect,
   onSubmit,
   isSubmitting = false,
   canProceed = true,
@@ -42,31 +46,37 @@ export function WizardShell({
       <nav aria-label="Sihirbaz adımları">
         <ol className="flex flex-wrap items-center gap-2">
           {STEPS.map((step, index) => {
-            const isCompleted = step.id < currentStep;
             const isCurrent = step.id === currentStep;
+            const isLocked = step.id > unlockedStep;
+            const isFilled = step.id < unlockedStep;
 
             return (
               <li key={step.id} className="flex items-center gap-2">
-                <div
+                <button
+                  type="button"
+                  onClick={() => onStepSelect(step.id)}
+                  disabled={isLocked || isSubmitting}
+                  aria-current={isCurrent ? "step" : undefined}
                   className={cn(
                     "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                    isCompleted && "bg-blue-100 text-blue-700",
                     isCurrent && "bg-blue-600 text-white",
-                    !isCompleted && !isCurrent && "bg-slate-100 text-slate-500"
+                    !isCurrent && !isLocked && "bg-blue-100 text-blue-700 hover:bg-blue-200",
+                    isLocked && "cursor-not-allowed bg-slate-100 text-slate-400",
+                    isSubmitting && "opacity-60",
                   )}
                 >
                   <span
                     className={cn(
                       "flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold",
-                      isCompleted && "bg-blue-600 text-white",
                       isCurrent && "bg-white text-blue-600",
-                      !isCompleted && !isCurrent && "bg-slate-300 text-slate-600"
+                      !isCurrent && !isLocked && "bg-blue-600 text-white",
+                      isLocked && "bg-slate-300 text-slate-500",
                     )}
                   >
-                    {isCompleted ? <Check className="h-3 w-3" /> : step.id}
+                    {isFilled && !isCurrent ? <Check className="h-3 w-3" /> : step.id}
                   </span>
                   <span className="hidden sm:inline">{step.label}</span>
-                </div>
+                </button>
                 {index < STEPS.length - 1 && (
                   <div className="hidden h-px w-4 bg-slate-200 sm:block" />
                 )}
