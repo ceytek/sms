@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HeaderCredits } from "@/modules/credits";
+import { HeaderInbox } from "@/modules/inbox";
 import { kvkkService } from "@/modules/kvkk";
 
 interface NavItem {
@@ -89,6 +90,8 @@ export default function DashboardLayout({
     const matched: string[] = [];
     if (pathname.startsWith("/customer/contacts")) matched.push("Rehber");
     if (pathname.startsWith("/customer/kvkk")) matched.push("KVKK / İzin Yönetimi");
+    if (pathname.startsWith("/admin/blocked-numbers")) matched.push("Yasaklı Numaralar");
+    if (pathname.startsWith("/admin/originators")) matched.push("Originatör Yönetimi");
     setOpenMenus(matched);
   }, [pathname]);
 
@@ -112,11 +115,32 @@ export default function DashboardLayout({
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
+  const blockedNumbersNav: NavItem = {
+    label: "Yasaklı Numaralar",
+    href: "/admin/blocked-numbers",
+    icon: <Ban className="h-5 w-5" />,
+    children: [
+      { label: "Yasaklı", href: "/admin/blocked-numbers", icon: <Ban className="h-4 w-4" />, exact: true },
+      { label: "SMS Gönderilmeyecek", href: "/admin/blocked-numbers/sms", icon: <PhoneOff className="h-4 w-4" /> },
+    ],
+  };
+
   const adminNavItems: NavItem[] = [
     { label: "Dashboard", href: "/admin", icon: <Home className="h-5 w-5" /> },
     { label: "Firma Yönetimi", href: "/admin/companies", icon: <Building2 className="h-5 w-5" /> },
-    { label: "Originatör Yönetimi", href: "/admin/originators", icon: <Hash className="h-5 w-5" /> },
+    {
+      label: "Originatör Yönetimi",
+      href: "/admin/originators",
+      icon: <Hash className="h-5 w-5" />,
+      children: [
+        { label: "Bayi / Müşteri", href: "/admin/originators", icon: <Hash className="h-4 w-4" />, exact: true },
+        { label: "Originatör talepleri", href: "/admin/originators/requests", icon: <Hash className="h-4 w-4" /> },
+        { label: "Kendi originatörlerim", href: "/admin/originators/mine", icon: <Hash className="h-4 w-4" /> },
+        { label: "Yasaklı Originatörler", href: "/admin/originators/banned", icon: <Ban className="h-4 w-4" /> },
+      ],
+    },
     { label: "Kredi Yönetimi", href: "/admin/credits", icon: <Coins className="h-5 w-5" /> },
+    blockedNumbersNav,
     { label: "Harita", href: "/admin/map", icon: <MapPin className="h-5 w-5" /> },
     { label: "Fiyat Yönetimi", href: "/admin/pricing", icon: <CreditCard className="h-5 w-5" /> },
     { label: "SMS Sağlayıcılar", href: "/admin/providers", icon: <Radio className="h-5 w-5" /> },
@@ -128,6 +152,7 @@ export default function DashboardLayout({
     { label: "Müşteri Yönetimi", href: "/admin/companies", icon: <Building2 className="h-5 w-5" /> },
     { label: "Originatör Yönetimi", href: "/admin/originators", icon: <Hash className="h-5 w-5" /> },
     { label: "Kredi Yönetimi", href: "/admin/credits", icon: <Coins className="h-5 w-5" /> },
+    blockedNumbersNav,
     { label: "Harita", href: "/admin/map", icon: <MapPin className="h-5 w-5" /> },
     { label: "Fiyat Görüntüleme", href: "/admin/pricing", icon: <CreditCard className="h-5 w-5" /> },
   ];
@@ -376,6 +401,7 @@ export default function DashboardLayout({
           </div>
           <div className="flex items-center gap-3 sm:gap-4">
             {user?.role === "CUSTOMER" && <HeaderCredits />}
+            <HeaderInbox />
             <span className="hidden sm:inline text-sm text-slate-600">
               Merhaba, <span className="font-medium">{user?.username}</span>
             </span>

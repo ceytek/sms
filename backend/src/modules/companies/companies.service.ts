@@ -195,7 +195,7 @@ export class CompaniesService {
       throw new ForbiddenException('Bayiler bayi oluşturamaz');
     }
 
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const companyCode = await this.generateCompanyCode(manager, dto.isDealer ?? false);
 
       const dealerCompanyId =
@@ -266,6 +266,7 @@ export class CompaniesService {
           savedCompany.id,
           dto.originators,
           savedSmsAccounts,
+          actor.id,
         );
       }
 
@@ -366,6 +367,11 @@ export class CompaniesService {
         },
       };
     });
+
+    if (actor.role === Role.DEALER && dto.originators?.length) {
+      await this.originatorsService.notifyPendingForCompany(result.id, actor);
+    }
+    return result;
   }
 
   async update(
@@ -973,6 +979,7 @@ export class CompaniesService {
     companyId: string,
     originators: NonNullable<CreateCompanyDto['originators']>,
     smsAccounts: CompanySmsAccount[],
+    actorId: string,
   ) {
     const entities: CompanyOriginator[] = [];
     const names = originators.map((item) => normalizeOriginatorName(item.name));
@@ -997,6 +1004,7 @@ export class CompaniesService {
           smsAccountId,
           status: OriginatorStatus.PENDING,
           providerReference: originator.providerReference,
+          createdBy: actorId,
         }),
       );
     }

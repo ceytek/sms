@@ -23,6 +23,17 @@ export const originatorsService = {
     return apiRequest<{ items: OriginatorRecord[] }>(`admin/originators/pending${qs}`);
   },
 
+  listMine() {
+    return apiRequest<{ items: OriginatorRecord[] }>("admin/originators/mine");
+  },
+
+  createMine(data: { name: string }) {
+    return apiRequest<OriginatorRecord>("admin/originators/mine", {
+      method: "POST",
+      body: data,
+    });
+  },
+
   list(query: OriginatorListQuery = {}) {
     const params = new URLSearchParams();
     if (query.search) params.set("search", query.search);

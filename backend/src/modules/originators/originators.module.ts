@@ -6,11 +6,13 @@ import { BannedOriginator } from './entities/banned-originator.entity.js';
 import { OriginatorsController } from './originators.controller.js';
 import { OriginatorsService } from './originators.service.js';
 import { AuthModule } from '../auth/auth.module.js';
+import { InboxModule } from '../inbox/inbox.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([CompanyOriginator, Company, BannedOriginator]),
     AuthModule,
+    InboxModule,
   ],
   controllers: [OriginatorsController],
   providers: [OriginatorsService],

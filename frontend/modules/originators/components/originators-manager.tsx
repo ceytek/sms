@@ -10,7 +10,6 @@ import {
   Loader2,
   Plus,
   Search,
-  ShieldAlert,
   Store,
   X,
 } from "lucide-react";
@@ -26,30 +25,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { originatorsService } from "../services/originators.service";
-import type {
-  BannedOriginator,
-  OriginatorCompany,
-  OriginatorRecord,
-  OriginatorStatus,
-} from "../types";
+import type { OriginatorCompany, OriginatorRecord } from "../types";
 import { ORIGINATOR_STATUS_LABELS } from "../types";
+import { originatorStatusBadgeClass } from "./originator-status";
+import { OriginatorBanDialog } from "./originator-ban-dialog";
 
 type TypeFilter = "ALL" | "DEALER" | "CUSTOMER";
 
-function statusBadgeClass(status: OriginatorStatus) {
-  if (status === "ACTIVE") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (status === "PENDING") return "bg-amber-50 text-amber-700 border-amber-200";
-  if (status === "PASSIVE") return "bg-slate-100 text-slate-600 border-slate-200";
-  return "bg-red-50 text-red-600 border-red-200";
-}
-
 export function OriginatorsManager({ userRole }: { userRole: string }) {
   const isAdmin = userRole === "ADMIN";
-  const [tab, setTab] = useState<"companies" | "pending" | "banned">("companies");
   const [companies, setCompanies] = useState<OriginatorCompany[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<OriginatorRecord[]>([]);
   const [dealerPending, setDealerPending] = useState<OriginatorRecord[]>([]);
-  const [banned, setBanned] = useState<BannedOriginator[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
@@ -62,10 +48,6 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
   const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmBan, setConfirmBan] = useState<OriginatorRecord | null>(null);
-
-  const [bannedName, setBannedName] = useState("");
-  const [bannedReason, setBannedReason] = useState("");
-  const [savingBanned, setSavingBanned] = useState(false);
 
   const loadCompanies = useCallback(async () => {
     setLoading(true);
@@ -83,26 +65,6 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
       setLoading(false);
     }
   }, [search, typeFilter]);
-
-  const loadBanned = useCallback(async () => {
-    if (!isAdmin) return;
-    try {
-      const result = await originatorsService.listBanned();
-      setBanned(result.items ?? []);
-    } catch {
-      setBanned([]);
-    }
-  }, [isAdmin]);
-
-  const loadPending = useCallback(async () => {
-    if (!isAdmin) return;
-    try {
-      const result = await originatorsService.listPending();
-      setPendingRequests(result.items ?? []);
-    } catch {
-      setPendingRequests([]);
-    }
-  }, [isAdmin]);
 
   const loadCompanyTitles = useCallback(async (company: OriginatorCompany) => {
     setLoadingTitles(true);
@@ -126,13 +88,7 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
 
   useEffect(() => {
     void loadCompanies();
-    void loadPending();
-  }, [loadCompanies, loadPending]);
-
-  useEffect(() => {
-    if (tab === "banned") void loadBanned();
-    if (tab === "pending") void loadPending();
-  }, [tab, loadBanned, loadPending]);
+  }, [loadCompanies]);
 
   const openCompany = (company: OriginatorCompany) => {
     setSelected(company);
@@ -142,7 +98,7 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
 
   const refreshSelected = async () => {
     if (!selected) return;
-    await Promise.all([loadCompanyTitles(selected), loadCompanies(), loadPending()]);
+    await Promise.all([loadCompanyTitles(selected), loadCompanies()]);
   };
 
   const handleAdd = async () => {
@@ -165,8 +121,11 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
     setError("");
     try {
       await originatorsService.updateStatus(id, status);
-      if (selected) await refreshSelected();
-      else await Promise.all([loadCompanies(), loadPending()]);
+      if (selected) {
+        await refreshSelected();
+      } else {
+        await loadCompanies();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Durum güncellenemedi");
     } finally {
@@ -181,40 +140,9 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
     try {
       await originatorsService.banExisting(confirmBan.id);
       setConfirmBan(null);
-      await Promise.all([refreshSelected(), loadBanned(), loadPending()]);
+      await refreshSelected();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Yasaklanamadı");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleAddBanned = async () => {
-    setSavingBanned(true);
-    setError("");
-    try {
-      await originatorsService.addBanned({
-        name: bannedName,
-        reason: bannedReason || undefined,
-      });
-      setBannedName("");
-      setBannedReason("");
-      await Promise.all([loadBanned(), loadCompanies()]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Yasaklı başlık eklenemedi");
-    } finally {
-      setSavingBanned(false);
-    }
-  };
-
-  const handleRemoveBanned = async (id: string) => {
-    setBusyId(id);
-    setError("");
-    try {
-      await originatorsService.removeBanned(id);
-      await loadBanned();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Kayıt silinemedi");
     } finally {
       setBusyId(null);
     }
@@ -226,42 +154,10 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
         <h1 className="text-2xl font-bold text-slate-900">Originatör Yönetimi</h1>
         <p className="mt-1 text-sm text-slate-500">
           {isAdmin
-            ? "Firma bazında başlıkları görün, ekleyin, aktif/pasif yapın veya yasaklayın."
+            ? "Bayi ve müşteri başlıklarını buradan tanımlayın, onaylayın veya pasife alın."
             : "Müşterilerinizin başlıklarını görün ve talep ekleyin. Aktif etme ana bayi onayına bağlıdır."}
         </p>
       </div>
-
-      {isAdmin && (
-        <div className="mb-5 flex w-fit rounded-xl border border-slate-200 bg-white p-1">
-          <button
-            type="button"
-            onClick={() => setTab("companies")}
-            className={`rounded-lg px-4 py-2 text-sm font-medium ${
-              tab === "companies" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            Firmalar
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("pending")}
-            className={`rounded-lg px-4 py-2 text-sm font-medium ${
-              tab === "pending" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            Bekleyen istekler{pendingRequests.length ? ` (${pendingRequests.length})` : ""}
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("banned")}
-            className={`rounded-lg px-4 py-2 text-sm font-medium ${
-              tab === "banned" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            Yasaklı Originatörler
-          </button>
-        </div>
-      )}
 
       {error && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -269,8 +165,7 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
         </div>
       )}
 
-      {tab === "companies" ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -395,120 +290,6 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
             </Table>
           )}
         </div>
-      ) : tab === "pending" ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4">
-            <h2 className="font-semibold text-slate-900">Bayilerin müşteri talepleri</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Alt bayilerin müşterileri için açtığı başlıklar burada onaylanır. Müşteri firmaları ana listede görünmez.
-            </p>
-          </div>
-          {pendingRequests.length === 0 ? (
-            <div className="px-6 py-16 text-center text-sm text-slate-500">Bekleyen müşteri talebi yok.</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Başlık</TableHead>
-                  <TableHead>Müşteri</TableHead>
-                  <TableHead>Bayi</TableHead>
-                  <TableHead className="text-right">İşlem</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingRequests.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-mono font-semibold">{item.name}</TableCell>
-                    <TableCell>
-                      <div className="font-medium text-slate-900">{item.companyName}</div>
-                      <div className="text-xs text-slate-500">{item.companyCode}</div>
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-600">{item.dealerCompanyName || "—"}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busyId === item.id}
-                          onClick={() => void handleStatus(item.id, "ACTIVE")}
-                        >
-                          <Check className="mr-1 h-3.5 w-3.5" />
-                          Aktif et
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 hover:text-red-700"
-                          disabled={busyId === item.id}
-                          onClick={() => setConfirmBan(item)}
-                        >
-                          <Ban className="mr-1 h-3.5 w-3.5" />
-                          Yasakla
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            Yasaklı listeye eklenen başlık bir daha tanımlanamaz. Aynı isimdeki mevcut başlıklar otomatik pasife alınır.
-          </div>
-          <div className="mb-5 grid gap-3 sm:grid-cols-[160px_1fr_auto]">
-            <Input
-              value={bannedName}
-              onChange={(event) => setBannedName(event.target.value.toUpperCase())}
-              maxLength={11}
-              placeholder="YASAKLIADI"
-              className="font-mono"
-            />
-            <Input
-              value={bannedReason}
-              onChange={(event) => setBannedReason(event.target.value)}
-              placeholder="Gerekçe (opsiyonel)"
-            />
-            <Button onClick={() => void handleAddBanned()} disabled={!bannedName.trim() || savingBanned}>
-              {savingBanned ? <Loader2 className="h-4 w-4 animate-spin" /> : "Yasaklıya ekle"}
-            </Button>
-          </div>
-          {banned.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">Yasaklı başlık yok.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Başlık</TableHead>
-                  <TableHead>Gerekçe</TableHead>
-                  <TableHead className="text-right">İşlem</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {banned.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-mono font-semibold">{item.name}</TableCell>
-                    <TableCell className="text-slate-500">{item.reason || "—"}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busyId === item.id}
-                        onClick={() => void handleRemoveBanned(item.id)}
-                      >
-                        Listeden çıkar
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      )}
 
       {selected && (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40">
@@ -566,7 +347,7 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="font-mono text-base font-bold text-slate-900">{item.name}</div>
-                          <Badge variant="outline" className={`mt-2 ${statusBadgeClass(item.status)}`}>
+                          <Badge variant="outline" className={`mt-2 ${originatorStatusBadgeClass(item.status)}`}>
                             {ORIGINATOR_STATUS_LABELS[item.status]}
                           </Badge>
                         </div>
@@ -662,25 +443,11 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
         </div>
       )}
 
-      {confirmBan && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
-            <h2 className="text-lg font-bold text-slate-900">Başlığı yasakla</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              <span className="font-mono font-semibold">{confirmBan.name}</span> yasaklı listeye eklenecek.
-              Bu isimdeki tüm mevcut başlıklar pasife alınacak ve yeniden tanımlanamayacak.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setConfirmBan(null)}>
-                Vazgeç
-              </Button>
-              <Button variant="destructive" onClick={() => void handleBanExisting()}>
-                Yasakla
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <OriginatorBanDialog
+        item={confirmBan}
+        onCancel={() => setConfirmBan(null)}
+        onConfirm={() => void handleBanExisting()}
+      />
     </div>
   );
 }

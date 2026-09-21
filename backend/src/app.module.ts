@@ -17,6 +17,9 @@ import { MessagingModule } from './modules/messaging/messaging.module.js';
 import { DocumentsModule } from './modules/documents/documents.module.js';
 import { ContactsModule } from './modules/contacts/contacts.module.js';
 import { KvkkModule } from './modules/kvkk/kvkk.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
+import { OriginatorRestrictionsModule } from './modules/originator-restrictions/originator-restrictions.module.js';
+import { InboxModule } from './modules/inbox/inbox.module.js';
 import { User } from './modules/auth/entities/user.entity.js';
 import { Company } from './modules/companies/entities/company.entity.js';
 import { CompanyContact } from './modules/companies/entities/company-contact.entity.js';
@@ -59,6 +62,9 @@ import { ContactTag } from './modules/contacts/entities/contact-tag.entity.js';
 import { ContactTagMember } from './modules/contacts/entities/contact-tag-member.entity.js';
 import { ContactImportJob } from './modules/contacts/entities/contact-import-job.entity.js';
 import { ContactImportError } from './modules/contacts/entities/contact-import-error.entity.js';
+import { NotificationDispatch } from './modules/notifications/entities/notification-dispatch.entity.js';
+import { OriginatorBlockedNumber } from './modules/originator-restrictions/entities/originator-blocked-number.entity.js';
+import { InboxNotification } from './modules/inbox/entities/inbox-notification.entity.js';
 
 const entities = [
   User,
@@ -103,6 +109,9 @@ const entities = [
   ContactTagMember,
   ContactImportJob,
   ContactImportError,
+  NotificationDispatch,
+  OriginatorBlockedNumber,
+  InboxNotification,
 ];
 
 @Module({
@@ -142,6 +151,9 @@ const entities = [
     DocumentsModule,
     ContactsModule,
     KvkkModule,
+    NotificationsModule,
+    OriginatorRestrictionsModule,
+    InboxModule,
   ],
 })
 export class AppModule {}

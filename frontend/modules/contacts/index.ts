@@ -4,6 +4,7 @@ export { TagsPage } from "./components/tags-page";
 export { CustomFieldsPage } from "./components/custom-fields-page";
 export { ImportHistoryPage } from "./components/import-history-page";
 export { RestrictedContactsPage } from "./components/restricted-contacts-page";
+export { DealerRestrictedContactsRoute } from "./components/dealer-restricted-contacts-route";
 export { contactsService } from "./services/contacts.service";
 export { contactGroupsService } from "./services/groups.service";
 export { contactTagsService } from "./services/tags.service";

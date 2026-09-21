@@ -19,6 +19,7 @@ export { StepReview } from "./components/step-review";
 export { StepContacts } from "./components/step-contacts";
 export { StepOriginators } from "./components/step-originators";
 export { StepUser } from "./components/step-user";
+export { CredentialsSuccessDialog } from "./components/credentials-success-dialog";
 export type {
   CompanyType,
   CustomerType,

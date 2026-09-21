@@ -24,7 +24,7 @@ import type { ContactActor } from './services/contact-access.service.js';
 
 @Controller('contacts')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.CUSTOMER)
+@Roles(Role.CUSTOMER, Role.DEALER, Role.ADMIN)
 export class ContactsController {
   constructor(private readonly contactsService: ContactsService) {}
 

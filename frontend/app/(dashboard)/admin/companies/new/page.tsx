@@ -13,6 +13,7 @@ import {
   StepContacts,
   StepOriginators,
   StepUser,
+  CredentialsSuccessDialog,
   companyService,
   referenceService,
   defaultWizardData,
@@ -29,7 +30,7 @@ import { buildCreateCompanyPayload } from "@/modules/companies/utils/build-creat
 import { parseCreditRefundRate } from "@/modules/companies/utils/credit-refund";
 import { pricingService, PriceList } from "@/modules/pricing";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, Copy } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 const TOTAL_STEPS = 7;
 
@@ -50,10 +51,14 @@ export default function NewCompanyPage() {
         ? "DEALER"
         : "CUSTOMER",
   });
-  const [credentials, setCredentials] = useState<GeneratedCredentials | null>(null);
+  const [created, setCreated] = useState<{
+    companyId: string;
+    mobile?: string;
+    email?: string;
+    credentials: GeneratedCredentials;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
 
   const [cities, setCities] = useState<City[]>([]);
   const [districts, setDistricts] = useState<District[]>([]);
@@ -156,7 +161,15 @@ export default function NewCompanyPage() {
     try {
       const result = await companyService.create(buildCreateCompanyPayload(data));
       if (result.generatedCredentials) {
-        setCredentials(result.generatedCredentials);
+        const contactMobile = result.contacts?.find((item) => item.mobile)?.mobile
+          ?? result.contacts?.find((item) => item.phone)?.phone;
+        const contactEmail = result.contacts?.find((item) => item.email)?.email;
+        setCreated({
+          companyId: result.id,
+          mobile: result.mobile || result.phone || contactMobile,
+          email: result.email || contactEmail,
+          credentials: result.generatedCredentials,
+        });
       } else {
         router.push(`/admin/companies/${result.id}`);
       }
@@ -165,19 +178,6 @@ export default function NewCompanyPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const copyToClipboard = () => {
-    if (!credentials) return;
-    const text = [
-      `Firma Kodu: ${credentials.companyCode}`,
-      `Kullanıcı Adı: ${credentials.username}`,
-      `Şifre: ${credentials.password}`,
-      `Rol: ${credentials.role === "DEALER" ? "Bayi" : "Müşteri"}`,
-    ].join("\n");
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const pageTitle = data.accountType === "DEALER" ? "Yeni Bayi Oluştur" : "Yeni Müşteri Oluştur";
@@ -262,58 +262,14 @@ export default function NewCompanyPage() {
         )}
       </WizardShell>
 
-      {/* Success Credentials Modal */}
-      {credentials && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100">
-                <Check className="h-5 w-5 text-emerald-600" />
-              </div>
-              <h2 className="text-lg font-semibold text-slate-900">
-                Firma Başarıyla Oluşturuldu
-              </h2>
-            </div>
-
-            <p className="mb-4 text-sm text-slate-600">
-              Aşağıdaki giriş bilgilerini kaydedin. Şifre bir daha gösterilmeyecektir.
-            </p>
-
-            <div className="space-y-3 rounded-lg bg-slate-50 p-4">
-              <div className="flex justify-between">
-                <span className="text-sm text-slate-500">Firma Kodu</span>
-                <span className="font-mono font-medium">{credentials.companyCode}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-slate-500">Kullanıcı Adı</span>
-                <span className="font-mono font-medium">{credentials.username}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-slate-500">Şifre</span>
-                <span className="font-mono font-medium">{credentials.password}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-slate-500">Rol</span>
-                <span className="font-medium">
-                  {credentials.role === "DEALER" ? "Bayi" : "Müşteri"}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <Button variant="outline" onClick={copyToClipboard} className="flex-1">
-                <Copy className="mr-2 h-4 w-4" />
-                {copied ? "Kopyalandı!" : "Kopyala"}
-              </Button>
-              <Button
-                onClick={() => router.push("/admin/companies")}
-                className="flex-1 bg-blue-600 hover:bg-blue-700"
-              >
-                Firma Listesine Git
-              </Button>
-            </div>
-          </div>
-        </div>
+      {created && (
+        <CredentialsSuccessDialog
+          companyId={created.companyId}
+          mobile={created.mobile}
+          email={created.email}
+          credentials={created.credentials}
+          onGoToList={() => router.push("/admin/companies")}
+        />
       )}
     </div>
   );

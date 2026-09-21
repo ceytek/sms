@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +13,8 @@ import { Company } from '../companies/entities/company.entity.js';
 import { BannedOriginator } from './entities/banned-originator.entity.js';
 import { OriginatorStatus } from '../../common/enums/originator-status.enum.js';
 import { Role } from '../../common/enums/role.enum.js';
+import { InboxEventType } from '../../common/enums/inbox-event-type.enum.js';
+import { InboxService } from '../inbox/inbox.service.js';
 import { OriginatorQueryDto, OriginatorCompanyQueryDto } from './dto/originator-query.dto.js';
 import { normalizeOriginatorName } from './originator-name.js';
 
@@ -19,6 +22,8 @@ type Actor = { id: string; role: string; companyId: string };
 
 @Injectable()
 export class OriginatorsService {
+  private readonly logger = new Logger(OriginatorsService.name);
+
   constructor(
     @InjectRepository(CompanyOriginator)
     private readonly originatorRepository: Repository<CompanyOriginator>,
@@ -26,6 +31,7 @@ export class OriginatorsService {
     private readonly companyRepository: Repository<Company>,
     @InjectRepository(BannedOriginator)
     private readonly bannedRepository: Repository<BannedOriginator>,
+    private readonly inboxService: InboxService,
   ) {}
 
   async assertNotBanned(names: string[]) {
@@ -216,6 +222,60 @@ export class OriginatorsService {
     return { items: items.map((originator) => this.serialize(originator)) };
   }
 
+  async hasActiveForCompany(companyId: string) {
+    if (!companyId) return false;
+    const count = await this.originatorRepository.count({
+      where: { companyId, status: OriginatorStatus.ACTIVE },
+    });
+    return count > 0;
+  }
+
+  async listMine(user: Actor) {
+    this.assertAdmin(user);
+    const items = await this.originatorRepository.find({
+      where: { companyId: user.companyId },
+      relations: ['company', 'company.dealerCompany'],
+      order: { createdAt: 'DESC' },
+    });
+    return { items: items.map((originator) => this.serialize(originator)) };
+  }
+
+  async createMine(dto: { name: string }, user: Actor) {
+    this.assertAdmin(user);
+    const name = normalizeOriginatorName(dto.name);
+    if (!name) {
+      throw new BadRequestException('Başlık adı zorunludur');
+    }
+    await this.assertNotBanned([name]);
+
+    const company = await this.companyRepository.findOne({
+      where: { id: user.companyId },
+    });
+    if (!company || company.deletedAt) {
+      throw new NotFoundException('Firma bulunamadı');
+    }
+
+    const existing = await this.originatorRepository.findOne({
+      where: { companyId: company.id, name },
+    });
+    if (existing) {
+      throw new ConflictException('Bu başlık zaten kayıtlı');
+    }
+
+    const originator = this.originatorRepository.create({
+      companyId: company.id,
+      name,
+      status: OriginatorStatus.ACTIVE,
+      createdBy: user.id,
+    });
+    const saved = await this.originatorRepository.save(originator);
+    const withCompany = await this.originatorRepository.findOne({
+      where: { id: saved.id },
+      relations: ['company', 'company.dealerCompany'],
+    });
+    return this.serialize(withCompany!);
+  }
+
   async createRequest(dto: { companyId: string; name: string }, user: Actor) {
     const name = normalizeOriginatorName(dto.name);
     if (!name) {
@@ -225,6 +285,7 @@ export class OriginatorsService {
 
     const company = await this.companyRepository.findOne({
       where: { id: dto.companyId },
+      relations: ['dealerCompany'],
     });
     if (!company || company.deletedAt) {
       throw new NotFoundException('Firma bulunamadı');
@@ -265,6 +326,14 @@ export class OriginatorsService {
       where: { id: saved.id },
       relations: ['company', 'company.dealerCompany'],
     });
+    if (user.role === Role.DEALER && withCompany) {
+      await this.emitInbox(InboxEventType.ORIGINATOR_REQUESTED, user, withCompany, {
+        dealerName: company.dealerCompany?.name,
+        dealerCompanyId: user.companyId,
+        requesterUserId: user.id,
+        requesterCompanyId: user.companyId,
+      });
+    }
     return this.serialize(withCompany!);
   }
 
@@ -276,6 +345,7 @@ export class OriginatorsService {
     this.assertAdmin(user);
     const originator = await this.requireOriginator(id);
     await this.assertNotBanned([originator.name]);
+    const previous = originator.status;
     originator.status = status;
     originator.updatedBy = user.id;
     await this.originatorRepository.save(originator);
@@ -283,6 +353,16 @@ export class OriginatorsService {
       where: { id },
       relations: ['company', 'company.dealerCompany'],
     });
+    if (withCompany && previous !== status) {
+      await this.emitInbox(
+        status === OriginatorStatus.ACTIVE
+          ? InboxEventType.ORIGINATOR_APPROVED
+          : InboxEventType.ORIGINATOR_PASSIVATED,
+        user,
+        withCompany,
+        { previousStatus: previous },
+      );
+    }
     return this.serialize(withCompany!);
   }
 
@@ -312,7 +392,7 @@ export class OriginatorsService {
       createdBy: user.id,
     });
     const saved = await this.bannedRepository.save(banned);
-    await this.passivateByName(name, user.id);
+    await this.passivateAndNotifyBanned(name, user);
     return saved;
   }
 
@@ -341,8 +421,75 @@ export class OriginatorsService {
       );
     }
 
-    await this.passivateByName(name, user.id);
+    await this.passivateAndNotifyBanned(name, user);
     return banned;
+  }
+
+  async notifyPendingForCompany(companyId: string, actor: Actor) {
+    const company = await this.companyRepository.findOne({
+      where: { id: companyId },
+      relations: ['dealerCompany'],
+    });
+    if (!company) return;
+
+    const originators = await this.originatorRepository.find({
+      where: { companyId, status: OriginatorStatus.PENDING },
+      relations: ['company', 'company.dealerCompany'],
+    });
+    for (const originator of originators) {
+      originator.company = originator.company ?? company;
+      await this.emitInbox(InboxEventType.ORIGINATOR_REQUESTED, actor, originator, {
+        dealerName: company.dealerCompany?.name,
+        dealerCompanyId: actor.companyId,
+        requesterUserId: actor.id,
+        requesterCompanyId: actor.companyId,
+      });
+    }
+  }
+
+  private async passivateAndNotifyBanned(name: string, user: Actor) {
+    const affected = await this.originatorRepository.find({
+      where: { name },
+      relations: ['company', 'company.dealerCompany'],
+    });
+    await this.passivateByName(name, user.id);
+    for (const originator of affected) {
+      await this.emitInbox(InboxEventType.ORIGINATOR_BANNED, user, originator);
+    }
+  }
+
+  private async emitInbox(
+    type: InboxEventType,
+    actor: Actor,
+    originator: CompanyOriginator,
+    extra: Record<string, unknown> = {},
+  ) {
+    try {
+      await this.inboxService.publish({
+        type,
+        actorId: actor.id,
+        payload: {
+          originatorId: originator.id,
+          originatorName: originator.name,
+          customerName: originator.company?.name,
+          customerCode: originator.company?.companyCode,
+          dealerName: originator.company?.dealerCompany?.name,
+          dealerCompanyId: originator.company?.dealerCompanyId,
+          requesterUserId: originator.createdBy,
+          requesterCompanyId: originator.company?.isDealer
+            ? originator.companyId
+            : originator.company?.dealerCompanyId,
+          ownerCompanyId: originator.companyId,
+          ownerIsDealer: originator.company?.isDealer ?? false,
+          ...extra,
+          actorCompanyId: actor.companyId,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Inbox bildirimi gönderilemedi (${type}): ${error instanceof Error ? error.message : 'bilinmeyen hata'}`,
+      );
+    }
   }
 
   private async passivateByName(name: string, userId: string) {

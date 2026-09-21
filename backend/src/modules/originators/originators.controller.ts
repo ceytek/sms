@@ -18,6 +18,7 @@ import { Role } from '../../common/enums/role.enum.js';
 import { OriginatorsService } from './originators.service.js';
 import { OriginatorQueryDto, OriginatorCompanyQueryDto } from './dto/originator-query.dto.js';
 import { CreateOriginatorRequestDto } from './dto/create-originator-request.dto.js';
+import { CreateOwnOriginatorDto } from './dto/create-own-originator.dto.js';
 import { UpdateOriginatorStatusDto } from './dto/update-originator-status.dto.js';
 import { CreateBannedOriginatorDto } from './dto/create-banned-originator.dto.js';
 
@@ -50,6 +51,21 @@ export class OriginatorsController {
     @CurrentUser() user: { id: string; role: string; companyId: string },
   ) {
     return this.originatorsService.findPendingRequests(user, dealerId || undefined);
+  }
+
+  @Get('mine')
+  @Roles(Role.ADMIN)
+  listMine(@CurrentUser() user: { id: string; role: string; companyId: string }) {
+    return this.originatorsService.listMine(user);
+  }
+
+  @Post('mine')
+  @Roles(Role.ADMIN)
+  createMine(
+    @Body() dto: CreateOwnOriginatorDto,
+    @CurrentUser() user: { id: string; role: string; companyId: string },
+  ) {
+    return this.originatorsService.createMine(dto, user);
   }
 
   @Post()
