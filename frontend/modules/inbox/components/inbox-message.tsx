@@ -8,6 +8,13 @@ function Bold({ children }: { children: string }) {
   return <strong className="font-semibold text-slate-800">{children}</strong>;
 }
 
+function formatDate(value: string) {
+  if (!value) return "";
+  const [year, month, day] = value.slice(0, 10).split("-");
+  if (!year || !month || !day) return value;
+  return `${Number(day)}.${Number(month)}.${year}`;
+}
+
 export function InboxMessage({ item }: { item: InboxNotification }) {
   const payload = item.payload;
   const dealer = text(payload?.dealerName);
@@ -68,6 +75,29 @@ export function InboxMessage({ item }: { item: InboxNotification }) {
         </p>
       );
     }
+  }
+
+  if (item.eventType === "SERVICE_TERM_EXPIRING") {
+    const service = text(payload?.serviceName) || "Hizmet";
+    const expires = formatDate(text(payload?.expiresAt));
+    const days =
+      typeof payload?.daysLeft === "number" ? ` (${payload.daysLeft} gün kaldı)` : "";
+    if (payload?.audience === "DEALER" && (customer || code)) {
+      return (
+        <p className="mt-0.5 text-xs leading-5 text-slate-600">
+          {customer ? <Bold>{customer}</Bold> : "Müşteri"}
+          {code ? ` (${code})` : null}
+          {` müşterisinin ${service} hizmetinin vadesi ${expires || "yakında"} tarihinde doluyor.`}
+          {days}
+        </p>
+      );
+    }
+    return (
+      <p className="mt-0.5 text-xs leading-5 text-slate-600">
+        {service} hizmetinizin vadesi {expires || "yakında"} tarihinde doluyor.
+        {days}
+      </p>
+    );
   }
 
   return <p className="mt-0.5 text-xs leading-5 text-slate-600">{item.body}</p>;

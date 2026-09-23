@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/com
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CompanyService } from '../../companies/entities/company-service.entity.js';
+import { daysUntil, isServiceTermExpired, toDateOnly } from '../../companies/service-term.js';
 import { randomBytes } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { normalizeTrMobile } from '../../../common/phone/normalize-tr-mobile.js';
@@ -30,15 +31,32 @@ export class KvkkAccessService {
     return actor.companyId;
   }
 
-  async isEnabled(ownerCompanyId: string) {
-    const row = await this.companyServiceRepository
+  async findAssignment(ownerCompanyId: string) {
+    return this.companyServiceRepository
       .createQueryBuilder('assignment')
-      .innerJoin('assignment.service', 'service')
+      .innerJoinAndSelect('assignment.service', 'service')
       .where('assignment.companyId = :ownerCompanyId', { ownerCompanyId })
-      .andWhere('assignment.isActive = true')
       .andWhere('service.code = :code', { code: KVKK_SERVICE_CODE })
       .getOne();
-    return Boolean(row);
+  }
+
+  serializeTerm(row: CompanyService | null) {
+    if (!row) return null;
+    const startDate = row.startDate ? toDateOnly(row.startDate) : null;
+    const endDate = row.endDate ? toDateOnly(row.endDate) : null;
+    const expired = isServiceTermExpired(row.endDate);
+    return {
+      startDate,
+      endDate,
+      startsYear: row.startsYear ?? null,
+      expired,
+      daysLeft: endDate && !expired ? daysUntil(endDate) : expired ? 0 : null,
+    };
+  }
+
+  async isEnabled(ownerCompanyId: string) {
+    const row = await this.findAssignment(ownerCompanyId);
+    return Boolean(row?.isActive) && !isServiceTermExpired(row?.endDate);
   }
 
   async assertEnabled(actor: KvkkActor) {

@@ -31,6 +31,7 @@ import { CompanyOriginator } from './modules/companies/entities/company-originat
 import { CompanyCreditAlert } from './modules/companies/entities/company-credit-alert.entity.js';
 import { CompanyService } from './modules/companies/entities/company-service.entity.js';
 import { CompanyServiceKeyword } from './modules/companies/entities/company-service-keyword.entity.js';
+import { CompanyServiceTerm } from './modules/companies/entities/company-service-term.entity.js';
 import { CompanyIysSettings } from './modules/companies/entities/company-iys-settings.entity.js';
 import { CompanyCustomPrice } from './modules/companies/entities/company-custom-price.entity.js';
 import { CompanyPriceList } from './modules/companies/entities/company-price-list.entity.js';
@@ -78,6 +79,7 @@ const entities = [
   CompanyCreditAlert,
   CompanyService,
   CompanyServiceKeyword,
+  CompanyServiceTerm,
   CompanyIysSettings,
   CompanyCustomPrice,
   CompanyPriceList,

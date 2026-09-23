@@ -32,7 +32,7 @@ export class InboxService {
     const drafts = await composer.compose(input);
     let created = 0;
     for (const draft of drafts) {
-      if (draft.recipientUserId && draft.recipientUserId === input.actorId) {
+      if (draft.recipientUserId && input.actorId && draft.recipientUserId === input.actorId) {
         continue;
       }
       await this.inboxRepository.save(

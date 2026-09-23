@@ -14,9 +14,18 @@ export const KVKK_METHOD_LABELS: Record<KvkkConsentMethod, string> = {
   QR: "QR Kod",
 };
 
+export interface KvkkServiceTerm {
+  startDate: string | null;
+  endDate: string | null;
+  startsYear: number | null;
+  expired: boolean;
+  daysLeft: number | null;
+}
+
 export interface KvkkStatus {
   enabled: boolean;
   smsConsentCheckEnabled?: boolean;
+  term?: KvkkServiceTerm | null;
 }
 
 export interface KvkkDashboard {

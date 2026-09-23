@@ -87,9 +87,13 @@ export interface CompanyServiceAssignment {
   serviceId: string;
   serviceName?: string;
   serviceCode?: string;
+  billingPeriod?: "ALWAYS" | "ANNUAL";
   isActive: boolean;
-  startDate?: string;
-  endDate?: string;
+  startsYear?: number | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  expired?: boolean;
+  daysLeft?: number | null;
 }
 
 export interface CompanyDetail extends CompanyListItem {

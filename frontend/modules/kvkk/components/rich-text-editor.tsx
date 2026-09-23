@@ -1,13 +1,36 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 type Props = {
   value: string;
   onChange: (html: string) => void;
 };
 
 export function RichTextEditor({ value, onChange }: Props) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const skipSyncRef = useRef(false);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    if (skipSyncRef.current) {
+      skipSyncRef.current = false;
+      return;
+    }
+    const next = value || "<p></p>";
+    if (editor.innerHTML !== next) {
+      editor.innerHTML = next;
+    }
+  }, [value]);
+
   const command = (cmd: string, arg?: string) => {
+    editorRef.current?.focus();
     document.execCommand(cmd, false, arg);
+    if (editorRef.current) {
+      skipSyncRef.current = true;
+      onChange(editorRef.current.innerHTML);
+    }
   };
 
   return (
@@ -29,11 +52,17 @@ export function RichTextEditor({ value, onChange }: Props) {
         </button>
       </div>
       <div
-        className="min-h-[180px] px-3 py-2 text-sm outline-none"
+        ref={editorRef}
+        dir="ltr"
+        lang="tr"
+        className="min-h-[180px] px-3 py-2 text-left text-sm outline-none"
+        style={{ direction: "ltr", unicodeBidi: "isolate" }}
         contentEditable
         suppressContentEditableWarning
-        dangerouslySetInnerHTML={{ __html: value || "<p></p>" }}
-        onInput={(event) => onChange((event.currentTarget as HTMLDivElement).innerHTML)}
+        onInput={(event) => {
+          skipSyncRef.current = true;
+          onChange(event.currentTarget.innerHTML);
+        }}
       />
     </div>
   );

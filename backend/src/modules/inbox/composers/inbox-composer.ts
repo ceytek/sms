@@ -16,12 +16,20 @@ export type InboxEventPayload = {
   ownerIsDealer?: boolean;
   previousStatus?: string;
   actorCompanyId?: string;
+  termId?: string;
+  serviceId?: string;
+  serviceName?: string;
+  serviceCode?: string;
+  startsYear?: number;
+  expiresAt?: string;
+  daysLeft?: number;
+  audience?: 'OWNER' | 'DEALER';
   [key: string]: unknown;
 };
 
 export type InboxPublishInput = {
   type: InboxEventType;
-  actorId: string;
+  actorId?: string;
   payload: InboxEventPayload;
 };
 

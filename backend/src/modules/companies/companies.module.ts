@@ -9,11 +9,13 @@ import { CompanySmsAccount } from './entities/company-sms-account.entity.js';
 import { CompanyOriginator } from './entities/company-originator.entity.js';
 import { CompanyCreditAlert } from './entities/company-credit-alert.entity.js';
 import { CompanyService } from './entities/company-service.entity.js';
+import { CompanyServiceTerm } from './entities/company-service-term.entity.js';
 import { CompanyIysSettings } from './entities/company-iys-settings.entity.js';
 import { CompanyPriceList } from './entities/company-price-list.entity.js';
 import { Wallet } from '../wallets/entities/wallet.entity.js';
 import { User } from '../auth/entities/user.entity.js';
 import { CompaniesController } from './companies.controller.js';
+import { MyCompanyServicesController } from './my-company-services.controller.js';
 import { CompaniesService } from './companies.service.js';
 import { CredentialsModule } from '../credentials/credentials.module.js';
 import { AuditModule } from '../audit/audit.module.js';
@@ -33,6 +35,7 @@ import { DocumentsModule } from '../documents/documents.module.js';
       CompanyOriginator,
       CompanyCreditAlert,
       CompanyService,
+      CompanyServiceTerm,
       CompanyIysSettings,
       CompanyPriceList,
       Wallet,
@@ -44,7 +47,7 @@ import { DocumentsModule } from '../documents/documents.module.js';
     OriginatorsModule,
     DocumentsModule,
   ],
-  controllers: [CompaniesController],
+  controllers: [CompaniesController, MyCompanyServicesController],
   providers: [CompaniesService],
   exports: [CompaniesService],
 })

@@ -34,10 +34,12 @@ export class KvkkController {
   @Get('status')
   async status(@CurrentUser() user: KvkkActor) {
     const ownerCompanyId = this.access.ownerCompanyId(user);
-    const enabled = await this.access.isEnabled(ownerCompanyId);
-    if (!enabled) return { enabled: false };
+    const assignment = await this.access.findAssignment(ownerCompanyId);
+    const term = this.access.serializeTerm(assignment);
+    const enabled = Boolean(assignment?.isActive) && !term?.expired;
+    if (!enabled) return { enabled: false, term };
     const settings = await this.settingsService.get(user);
-    return { enabled: true, smsConsentCheckEnabled: settings.smsConsentCheckEnabled };
+    return { enabled: true, smsConsentCheckEnabled: settings.smsConsentCheckEnabled, term };
   }
 
   @Get('dashboard')

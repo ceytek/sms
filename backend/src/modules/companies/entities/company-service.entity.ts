@@ -25,11 +25,14 @@ export class CompanyService {
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
+  @Column({ name: 'starts_year', type: 'int', nullable: true })
+  startsYear?: number;
+
   @Column({ name: 'start_date', type: 'date', nullable: true })
-  startDate?: Date;
+  startDate?: string;
 
   @Column({ name: 'end_date', type: 'date', nullable: true })
-  endDate?: Date;
+  endDate?: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

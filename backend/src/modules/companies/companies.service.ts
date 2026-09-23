@@ -15,6 +15,14 @@ import { CompanySmsAccount } from './entities/company-sms-account.entity.js';
 import { CompanyOriginator } from './entities/company-originator.entity.js';
 import { CompanyCreditAlert } from './entities/company-credit-alert.entity.js';
 import { CompanyService } from './entities/company-service.entity.js';
+import { CompanyServiceTerm } from './entities/company-service-term.entity.js';
+import {
+  buildAnnualTerm,
+  daysUntil,
+  isAnnualBilling,
+  isServiceTermExpired,
+  toDateOnly,
+} from './service-term.js';
 import { CompanyIysSettings } from './entities/company-iys-settings.entity.js';
 import { CompanyPriceList } from './entities/company-price-list.entity.js';
 import { Service } from '../reference/entities/service.entity.js';
@@ -186,6 +194,18 @@ export class CompaniesService {
     return this.withDocumentSummary(this.sanitizeCompany(company));
   }
 
+  async listMyServices(actor: { companyId?: string }) {
+    if (!actor.companyId) {
+      throw new ForbiddenException('Firma bilgisi bulunamadı');
+    }
+    const rows = await this.dataSource.getRepository(CompanyService).find({
+      where: { companyId: actor.companyId },
+      relations: ['service'],
+      order: { createdAt: 'ASC' },
+    });
+    return { items: rows.map((row) => this.serializeCompanyService(row)) };
+  }
+
   async create(
     dto: CreateCompanyDto,
     actor: { id: string; role: string; companyId: string },
@@ -288,6 +308,7 @@ export class CompaniesService {
         manager,
         savedCompany.id,
         dto.services ?? [],
+        actor.id,
       );
 
       if (dto.iys) {
@@ -500,7 +521,7 @@ export class CompaniesService {
 
       if (dto.services !== undefined) {
         await manager.delete(CompanyService, { companyId: id });
-        await this.saveCompanyServices(manager, id, dto.services);
+        await this.saveCompanyServices(manager, id, dto.services, actorUserId);
       }
 
       if (dto.iys !== undefined) {
@@ -584,13 +605,14 @@ export class CompaniesService {
         throw new BadRequestException('Bu hizmet zaten tanımlı');
       }
 
-      await manager.save(
+      const saved = await manager.save(
         manager.create(CompanyService, {
           companyId,
           serviceId,
           isActive: true,
         }),
       );
+      await this.openAnnualTerm(manager, saved, service, actorUserId);
 
       if (service.code === 'AI') {
         const aiWallet = await manager.findOne(Wallet, {
@@ -635,7 +657,15 @@ export class CompaniesService {
         throw new NotFoundException('Bu hizmet firmaya tanımlı değil');
       }
       existing.isActive = isActive;
-      await manager.save(existing);
+      if (
+        isActive &&
+        isAnnualBilling(service.billingPeriod) &&
+        (!existing.endDate || isServiceTermExpired(existing.endDate))
+      ) {
+        await this.openAnnualTerm(manager, existing, service, actorUserId);
+      } else {
+        await manager.save(existing);
+      }
       await this.auditService.log(
         'UPDATE',
         'CompanyService',
@@ -876,6 +906,7 @@ export class CompaniesService {
     manager: EntityManager,
     companyId: string,
     extra: CreateCompanyServiceDto[] = [],
+    actorUserId?: string,
   ) {
     const smsService = await manager.findOne(Service, {
       where: { code: SMS_SERVICE_CODE },
@@ -885,6 +916,10 @@ export class CompaniesService {
     }
 
     const extras = extra.filter((service) => service.serviceId !== smsService.id);
+    const extraCatalog = extras.length
+      ? await manager.find(Service, { where: { id: In(extras.map((item) => item.serviceId)) } })
+      : [];
+    const extraById = new Map(extraCatalog.map((item) => [item.id, item]));
     const rows = [
       manager.create(CompanyService, {
         companyId,
@@ -896,14 +931,61 @@ export class CompaniesService {
           companyId,
           serviceId: service.serviceId,
           isActive: service.isActive ?? true,
-          startDate: service.startDate
-            ? new Date(service.startDate)
-            : undefined,
-          endDate: service.endDate ? new Date(service.endDate) : undefined,
+          startDate: service.startDate ? toDateOnly(service.startDate) : undefined,
+          endDate: service.endDate ? toDateOnly(service.endDate) : undefined,
         }),
       ),
     ];
-    await manager.save(rows);
+    const saved = await manager.save(rows);
+    for (const row of saved) {
+      const catalog = row.serviceId === smsService.id ? smsService : extraById.get(row.serviceId);
+      if (catalog) {
+        await this.openAnnualTerm(manager, row, catalog, actorUserId);
+      }
+    }
+  }
+
+  private async openAnnualTerm(
+    manager: EntityManager,
+    assignment: CompanyService,
+    service: Service,
+    actorUserId?: string,
+  ) {
+    if (!isAnnualBilling(service.billingPeriod) || !assignment.isActive) return;
+
+    const dtoStart = assignment.startDate ? toDateOnly(assignment.startDate) : undefined;
+    const dtoEnd = assignment.endDate ? toDateOnly(assignment.endDate) : undefined;
+    const term =
+      dtoStart && dtoEnd
+        ? {
+            startsYear: Number(dtoStart.slice(0, 4)),
+            startedAt: dtoStart,
+            expiresAt: dtoEnd,
+          }
+        : buildAnnualTerm(new Date(), service.termMonths || 12);
+
+    await manager.update(
+      CompanyServiceTerm,
+      { companyServiceId: assignment.id, isCurrent: true },
+      { isCurrent: false },
+    );
+
+    assignment.startDate = term.startedAt;
+    assignment.endDate = term.expiresAt;
+    assignment.startsYear = term.startsYear;
+    await manager.save(assignment);
+    await manager.save(
+      manager.create(CompanyServiceTerm, {
+        companyServiceId: assignment.id,
+        companyId: assignment.companyId,
+        serviceId: assignment.serviceId,
+        startsYear: term.startsYear,
+        startedAt: term.startedAt,
+        expiresAt: term.expiresAt,
+        isCurrent: true,
+        createdBy: actorUserId,
+      }),
+    );
   }
 
   private async saveSecuritySettings(
@@ -1157,20 +1239,31 @@ export class CompaniesService {
         creditRefundRate:
           account.creditRefundRate == null ? null : Number(account.creditRefundRate),
       })),
-      services: c.services?.map((s: any) => ({
-        serviceId: s.serviceId,
-        serviceName: s.service?.name ?? s.serviceId,
-        serviceCode: s.service?.code,
-        isActive: s.isActive,
-        startDate: s.startDate,
-        endDate: s.endDate,
-      })),
+      services: c.services?.map((s: any) => this.serializeCompanyService(s)),
       securitySettings: company.securitySettings?.map((settings) => ({
         ...settings,
         filePasswordEncrypted: settings.filePasswordEncrypted
           ? '[REDACTED]'
           : undefined,
       })),
+    };
+  }
+
+  private serializeCompanyService(row: CompanyService) {
+    const startDate = row.startDate ? toDateOnly(row.startDate) : null;
+    const endDate = row.endDate ? toDateOnly(row.endDate) : null;
+    const expired = isServiceTermExpired(row.endDate);
+    return {
+      serviceId: row.serviceId,
+      serviceName: row.service?.name ?? row.serviceId,
+      serviceCode: row.service?.code,
+      billingPeriod: row.service?.billingPeriod,
+      isActive: row.isActive,
+      startsYear: row.startsYear ?? null,
+      startDate,
+      endDate,
+      expired,
+      daysLeft: endDate && !expired ? daysUntil(endDate) : expired ? 0 : null,
     };
   }
 

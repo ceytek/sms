@@ -24,6 +24,8 @@ export interface Service {
   code: string;
   name: string;
   description?: string;
+  billingPeriod?: "ALWAYS" | "ANNUAL";
+  termMonths?: number;
   isActive: boolean;
 }
 

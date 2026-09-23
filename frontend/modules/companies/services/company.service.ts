@@ -3,6 +3,7 @@ import {
   CompanyDetail,
   CompanyListItem,
   CompanyListQuery,
+  CompanyServiceAssignment,
   ContactType,
   CreateCompanyDto,
   CreateCompanyResponse,
@@ -75,6 +76,10 @@ export const companyService = {
       method: "PATCH",
       body: data,
     });
+  },
+
+  async listMyServices() {
+    return apiRequest<{ items: CompanyServiceAssignment[] }>("company-services/mine");
   },
 
   async addService(id: string, serviceId: string): Promise<CompanyDetail> {

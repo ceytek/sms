@@ -887,6 +887,13 @@ function ServicesTab({
   const assignedIds = new Set(company.services.map((item) => item.serviceId));
   const available = catalog.filter((item) => item.isActive && !assignedIds.has(item.id));
 
+  const formatDate = (value?: string | null) => {
+    if (!value) return "";
+    const [year, month, day] = value.slice(0, 10).split("-");
+    if (!year || !month || !day) return value;
+    return `${day}.${month}.${year}`;
+  };
+
   const addService = async () => {
     if (!selectedId) return;
     setSaving(true);
@@ -907,19 +914,41 @@ function ServicesTab({
       <Section title="Tanımlı Hizmetler">
         {company.services.length > 0 ? (
           <div className="space-y-2">
-            {company.services.map((service, i) => (
-              <div key={service.serviceId ?? i} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className={`h-2 w-2 rounded-full ${service.isActive ? "bg-emerald-500" : "bg-slate-300"}`} />
-                  <span className="text-sm font-medium text-slate-800">
-                    {service.serviceName ?? service.serviceId}
-                    {service.serviceCode === "SMS" ? (
-                      <span className="ml-2 text-xs font-normal text-slate-400">varsayılan</span>
+            {company.services.map((service, i) => {
+              const expired = Boolean(service.expired) || (
+                Boolean(service.endDate) && service.endDate!.slice(0, 10) < new Date().toISOString().slice(0, 10)
+              );
+              const showTerm = service.billingPeriod === "ANNUAL" || Boolean(service.startDate || service.endDate);
+              return (
+              <div key={service.serviceId ?? i} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${service.isActive && !expired ? "bg-emerald-500" : "bg-slate-300"}`} />
+                  <div>
+                    <span className="text-sm font-medium text-slate-800">
+                      {service.serviceName ?? service.serviceId}
+                      {service.serviceCode === "SMS" ? (
+                        <span className="ml-2 text-xs font-normal text-slate-400">varsayılan</span>
+                      ) : showTerm ? (
+                        <span className="ml-2 text-xs font-normal text-slate-400">yıllık</span>
+                      ) : null}
+                    </span>
+                    {showTerm ? (
+                      <p className={`mt-0.5 text-xs ${expired ? "text-amber-700" : "text-slate-500"}`}>
+                        Başlangıç <span className="font-medium text-slate-700">{formatDate(service.startDate) || "—"}</span>
+                        {" · "}
+                        Bitiş <span className="font-medium text-slate-700">{formatDate(service.endDate) || "—"}</span>
+                        {expired
+                          ? " · vadesi doldu"
+                          : service.daysLeft != null
+                            ? ` · ${service.daysLeft} gün kaldı`
+                            : ""}
+                      </p>
                     ) : null}
-                  </span>
+                  </div>
                 </div>
-                <Badge variant="outline" className={service.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}>
-                  {service.isActive ? "Aktif" : "Pasif"}
+                <div className="flex shrink-0 items-center gap-3">
+                <Badge variant="outline" className={service.isActive && !expired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}>
+                  {expired ? "Vadesi doldu" : service.isActive ? "Aktif" : "Pasif"}
                 </Badge>
                 {service.serviceCode !== "SMS" ? (
                   <Switch
@@ -937,8 +966,10 @@ function ServicesTab({
                     }}
                   />
                 ) : null}
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-slate-400">Henüz hizmet tanımlanmamış.</p>
