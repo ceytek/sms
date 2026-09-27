@@ -26,6 +26,7 @@ import { creditsService } from "@/modules/credits/services/credits.service";
 import { contactGroupsService } from "@/modules/contacts/services/groups.service";
 import { contactsService } from "@/modules/contacts/services/contacts.service";
 import { originatorRestrictionsService } from "@/modules/contacts/services/originator-restrictions.service";
+import { createClientId } from "@/lib/client-id";
 import { formatTrMobile, normalizeTrMobile, parseGsmNumbers } from "@/lib/phone";
 import { parseSmsSpreadsheet } from "@/lib/parse-sms-spreadsheet";
 import { previewSmsTemplate, smsEncodingAndParts, smsProgress } from "../sms-text";
@@ -142,7 +143,7 @@ export function SmsSendPage() {
   const [restrictHint, setRestrictHint] = useState("");
   const [restrictionsReady, setRestrictionsReady] = useState(false);
   const [smsBalance, setSmsBalance] = useState<number | null>(null);
-  const key = useMemo(() => crypto.randomUUID(), []);
+  const key = useMemo(() => createClientId(), []);
 
   const progress = smsProgress(body);
   const { parts } = smsEncodingAndParts(body);
@@ -325,7 +326,7 @@ export function SmsSendPage() {
       return [
         ...prev,
         {
-          key: crypto.randomUUID(),
+          key: createClientId(),
           type: "CONTACT_GROUP",
           label: group.name,
           groupId: group.id,
@@ -375,7 +376,7 @@ export function SmsSendPage() {
         ...allowed.map((item) => item.normalizedPhone || item.mobilePhone),
       ]);
       const nextItem: BasketItem = {
-        key: existing?.key ?? crypto.randomUUID(),
+        key: existing?.key ?? createClientId(),
         type: "CONTACT_PICK",
         label: group ? `${group.name} (seçili)` : "Seçili kişiler",
         groupId: group?.id,
@@ -404,7 +405,7 @@ export function SmsSendPage() {
       const existing = prev.find((item) => item.type === "MANUAL");
       const merged = parseGsmNumbers([...(existing?.phones ?? []), ...allowed].join("\n")).valid;
       const nextItem: BasketItem = {
-        key: existing?.key ?? crypto.randomUUID(),
+        key: existing?.key ?? createClientId(),
         type: "MANUAL",
         label: "Manuel numaralar",
         phones: merged,
@@ -437,7 +438,7 @@ export function SmsSendPage() {
         return [
           ...prev,
           {
-            key: crypto.randomUUID(),
+            key: createClientId(),
             type: "FILE",
             label: file.name,
             phones: allowed,
@@ -466,7 +467,7 @@ export function SmsSendPage() {
       return [
         ...prev,
         {
-          key: crypto.randomUUID(),
+          key: createClientId(),
           type: "CONTACT_BOOK",
           label: "Tüm rehber",
           excludedContactIds: excludedIds,

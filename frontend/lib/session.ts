@@ -1,3 +1,5 @@
+import { createClientId } from "@/lib/client-id";
+
 const TOKEN_KEY = "accessToken";
 const USER_KEY = "user";
 const IMP_TOKEN_KEY = "impersonateToken";
@@ -87,7 +89,7 @@ export function createImpersonationHandoff(
   user: SessionUser,
   originalUser: SessionUser | null,
 ): string {
-  const key = crypto.randomUUID();
+  const key = createClientId();
   const payload: ImpersonationHandoff = {
     accessToken,
     user,
