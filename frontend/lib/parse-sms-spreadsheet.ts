@@ -48,8 +48,9 @@ export async function parseSmsSpreadsheet(file: File): Promise<string[]> {
     const text = await file.text();
     return [text];
   }
-  const XLSX = await import("xlsx");
-  const lib = (XLSX as { default?: typeof XLSX }).default ?? XLSX;
+  type XlsxLib = Pick<typeof import("xlsx"), "read" | "utils">;
+  const loaded = (await import("xlsx")) as unknown as XlsxLib & { default?: XlsxLib };
+  const lib = loaded.default?.read ? loaded.default : loaded;
   const buf = await file.arrayBuffer();
   const workbook = lib.read(buf, { type: "array", raw: false });
   const sheetName = workbook.SheetNames[0];
