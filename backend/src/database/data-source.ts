@@ -19,4 +19,5 @@ export default new DataSource({
   entities: [join(__dirname, '../**/*.entity.js')],
   migrations: [join(__dirname, 'migrations/*.js')],
   synchronize: false,
+  migrationsTransactionMode: 'each',
 });

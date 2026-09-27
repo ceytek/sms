@@ -63,10 +63,13 @@ export function StepOriginators({ data, onChange, isDealer }: StepOriginatorsPro
               <div className="flex-1">
                 <Input
                   value={originator}
-                  onChange={(e) => updateOriginator(index, e.target.value.toUpperCase())}
+                  onChange={(e) => updateOriginator(index, e.target.value)}
                   maxLength={11}
-                  placeholder="FIRMAADI"
+                  placeholder="FirmaAdi"
                   className="font-mono"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
               </div>
               <span className="text-xs text-slate-400">{originator.length}/11</span>

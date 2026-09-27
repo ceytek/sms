@@ -519,7 +519,7 @@ export class InitialSchema1730000000001 implements MigrationInterface {
 
     await queryRunner.query(`
       INSERT INTO "sms_providers" ("id", "code", "name", "is_active", "config_schema") VALUES
-      ('a0000001-0000-4000-8000-000000000001', 'KOCAELI', 'Kocaeli SMS', true, '{"fields":["username","password","subscriberNo"]}'),
+      ('a0000001-0000-4000-8000-000000000001', 'KOCAELI', 'VoiceTelekom', true, '{"fields":["username","password","subscriberNo"]}'),
       ('a0000001-0000-4000-8000-000000000002', 'BIR_TELEKOM', 'Bir Telekom', true, '{"fields":["username","password","apiKey"]}'),
       ('a0000001-0000-4000-8000-000000000003', 'VOICE_TELEKOM', 'VoiceTelekom', true, '{"fields":["username","password","subscriberNo","apiKey"]}');
 

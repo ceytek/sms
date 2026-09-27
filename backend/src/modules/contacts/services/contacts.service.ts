@@ -18,10 +18,11 @@ import { ContactGroupsService } from './contact-groups.service.js';
 import { ContactTagsService } from './contact-tags.service.js';
 import { ContactCustomFieldsService } from './contact-custom-fields.service.js';
 import { toContactDto } from './contact-presenter.js';
+import { SmsCampaignRecipient } from '../../messaging/entities/sms-campaign-recipient.entity.js';
+import { formatTrMobile, normalizeTrMobile } from '../../../common/phone/normalize-tr-mobile.js';
 import { ContactSource } from '../../../common/enums/contact-source.enum.js';
 import { ContactStatus } from '../../../common/enums/contact-status.enum.js';
 import { ContactBulkAction } from '../../../common/enums/contact-bulk-action.enum.js';
-import { normalizeTrMobile } from '../../../common/phone/normalize-tr-mobile.js';
 import * as XLSX from 'xlsx';
 
 @Injectable()
@@ -45,13 +46,40 @@ export class ContactsService {
 
   async summary(actor: ContactActor) {
     const ownerCompanyId = this.access.ownerCompanyId(actor);
-    const [total, active, blacklist, smsBlocked, groupCount, canImportFromCompanies] = await Promise.all([
+    const now = new Date();
+    const thisStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const taggedCount = async (from?: Date, to?: Date) => {
+      const qb = this.tagMemberRepository
+        .createQueryBuilder('member')
+        .innerJoin('member.tag', 'tag')
+        .where('tag.ownerCompanyId = :ownerCompanyId', { ownerCompanyId })
+        .select('COUNT(DISTINCT member.contactId)', 'count');
+      if (from) qb.andWhere('member.createdAt >= :from', { from });
+      if (to) qb.andWhere('member.createdAt < :to', { to });
+      const row = await qb.getRawOne<{ count: string }>();
+      return Number(row?.count || 0);
+    };
+    const [total, active, blacklist, smsBlocked, groupCount, canImportFromCompanies, createdThisMonth, createdPrevMonth, taggedContacts, taggedThisMonth, taggedPrevMonth] = await Promise.all([
       this.contactRepository.count({ where: { ownerCompanyId } }),
       this.contactRepository.count({ where: { ownerCompanyId, status: ContactStatus.ACTIVE } }),
       this.contactRepository.count({ where: { ownerCompanyId, status: ContactStatus.BLACKLIST } }),
       this.contactRepository.count({ where: { ownerCompanyId, status: ContactStatus.SMS_BLOCKED } }),
       this.groupRepository.count({ where: { ownerCompanyId, isActive: true } }),
       this.access.companyImportActor(actor).then((scope) => Boolean(scope)),
+      this.contactRepository
+        .createQueryBuilder('contact')
+        .where('contact.ownerCompanyId = :ownerCompanyId', { ownerCompanyId })
+        .andWhere('contact.createdAt >= :thisStart', { thisStart })
+        .getCount(),
+      this.contactRepository
+        .createQueryBuilder('contact')
+        .where('contact.ownerCompanyId = :ownerCompanyId', { ownerCompanyId })
+        .andWhere('contact.createdAt >= :prevStart AND contact.createdAt < :thisStart', { prevStart, thisStart })
+        .getCount(),
+      taggedCount(),
+      taggedCount(thisStart),
+      taggedCount(prevStart, thisStart),
     ]);
     return {
       total,
@@ -61,6 +89,11 @@ export class ContactsService {
       blocked: blacklist + smsBlocked,
       groupCount,
       canImportFromCompanies,
+      createdThisMonth,
+      createdPrevMonth,
+      taggedContacts,
+      taggedThisMonth,
+      taggedPrevMonth,
     };
   }
 
@@ -82,6 +115,50 @@ export class ContactsService {
     const contact = await this.requireContact(this.access.ownerCompanyId(actor), id);
     const [decorated] = await this.decorate([contact]);
     return decorated;
+  }
+
+  async smsHistory(id: string, actor: ContactActor, page = 1, limit = 20) {
+    const ownerCompanyId = this.access.ownerCompanyId(actor);
+    const contact = await this.requireContact(ownerCompanyId, id);
+    const take = Math.min(50, Math.max(1, limit));
+    const skip = (Math.max(1, page) - 1) * take;
+    const phone = contact.normalizedPhone;
+    const last10 = phone ? phone.slice(-10) : '';
+    const qb = this.contactRepository.manager
+      .createQueryBuilder(SmsCampaignRecipient, 'recipient')
+      .innerJoinAndSelect('recipient.campaign', 'campaign')
+      .where('campaign.sender_company_id = :companyId', { companyId: ownerCompanyId })
+      .andWhere(
+        `(recipient.contact_id = :contactId
+          OR recipient.mobile_normalized = :phone
+          OR RIGHT(COALESCE(recipient.mobile_normalized, ''), 10) = :last10
+          OR RIGHT(regexp_replace(COALESCE(recipient.mobile_raw, ''), '\\D', '', 'g'), 10) = :last10)`,
+        { contactId: contact.id, phone: phone || '', last10: last10 || '__none__' },
+      )
+      .andWhere("recipient.status NOT IN ('INVALID', 'DUPLICATE')")
+      .orderBy('campaign.createdAt', 'DESC')
+      .addOrderBy('recipient.id', 'DESC')
+      .skip(skip)
+      .take(take);
+    const [rows, total] = await qb.getManyAndCount();
+    return {
+      contact: {
+        id: contact.id,
+        name: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || null,
+        phone: formatTrMobile(contact.normalizedPhone) || contact.mobilePhone,
+      },
+      items: rows.map((row) => ({
+        id: row.id,
+        campaignId: row.campaignId,
+        sentAt: row.deliveredAt || row.acceptedAt || row.campaign?.createdAt,
+        originatorName: row.campaign?.originatorName,
+        status: row.status,
+        excludeReason: row.excludeReason,
+        body: row.renderedBody || row.campaign?.body,
+        smsParts: row.smsParts,
+      })),
+      meta: { page: Math.max(1, page), limit: take, total, totalPages: Math.max(1, Math.ceil(total / take)) },
+    };
   }
 
   async create(dto: CreateContactDto, actor: ContactActor) {

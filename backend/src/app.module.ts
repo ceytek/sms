@@ -52,6 +52,9 @@ import { BannedOriginator } from './modules/originators/entities/banned-originat
 import { SmsCampaign } from './modules/messaging/entities/sms-campaign.entity.js';
 import { SmsCampaignSegment } from './modules/messaging/entities/sms-campaign-segment.entity.js';
 import { SmsCampaignRecipient } from './modules/messaging/entities/sms-campaign-recipient.entity.js';
+import { SmsCampaignSource } from './modules/messaging/entities/sms-campaign-source.entity.js';
+import { SmsCampaignBatch } from './modules/messaging/entities/sms-campaign-batch.entity.js';
+import { SmsTemplate } from './modules/messaging/entities/sms-template.entity.js';
 import { DocumentType } from './modules/documents/entities/document-type.entity.js';
 import { DocumentTypeAssignment } from './modules/documents/entities/document-type-assignment.entity.js';
 import { CompanyDocument } from './modules/documents/entities/company-document.entity.js';
@@ -100,6 +103,9 @@ const entities = [
   SmsCampaign,
   SmsCampaignSegment,
   SmsCampaignRecipient,
+  SmsCampaignSource,
+  SmsCampaignBatch,
+  SmsTemplate,
   DocumentType,
   DocumentTypeAssignment,
   CompanyDocument,

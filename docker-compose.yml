@@ -60,6 +60,36 @@ services:
       CREDENTIAL_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       AI_SERVICE_URL: http://ai-service:8000
       PORT: 3001
+      SMS_PROVIDER_MODE: mock
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  sms-worker:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: sms-worker
+    restart: unless-stopped
+    command: ["node", "dist/sms-worker.js"]
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: sms_user
+      DATABASE_PASSWORD: sms_password
+      DATABASE_NAME: sms_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: docker-jwt-secret-change-in-production
+      CREDENTIAL_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      SMS_WORKER: "1"
+      SMS_PROVIDER_MODE: mock
+    volumes:
+      - backend_uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,21 +125,6 @@ services:
   # Ileride eklenecek servisler
   # ============================================
 
-  # sms-worker:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: ../docker/worker.Dockerfile
-  #   container_name: sms-worker
-  #   restart: unless-stopped
-  #   environment:
-  #     DATABASE_HOST: postgres
-  #     REDIS_HOST: redis
-  #   depends_on:
-  #     - postgres
-  #     - redis
-  #   deploy:
-  #     replicas: 2
-
   # nginx:
   #   image: nginx:alpine
   #   container_name: sms-nginx
@@ -136,3 +151,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  backend_uploads:

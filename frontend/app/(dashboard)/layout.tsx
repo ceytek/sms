@@ -90,6 +90,7 @@ export default function DashboardLayout({
     const matched: string[] = [];
     if (pathname.startsWith("/customer/contacts")) matched.push("Rehber");
     if (pathname.startsWith("/customer/kvkk")) matched.push("KVKK / İzin Yönetimi");
+    if (pathname.startsWith("/customer/sms")) matched.push("SMS Gönderim Merkezi");
     if (pathname.startsWith("/admin/blocked-numbers")) matched.push("Yasaklı Numaralar");
     if (pathname.startsWith("/admin/originators")) matched.push("Originatör Yönetimi");
     setOpenMenus(matched);
@@ -110,6 +111,13 @@ export default function DashboardLayout({
   const isActive = (href: string, exact = false) => {
     if (href === "/admin" || href === "/customer") {
       return pathname === href;
+    }
+    if (href === "/customer/sms" && exact) {
+      return (
+        pathname === "/customer/sms" ||
+        pathname === "/customer/sms/new" ||
+        /^\/customer\/sms\/[0-9a-f-]{36}$/i.test(pathname)
+      );
     }
     if (exact) return pathname === href;
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -189,8 +197,16 @@ export default function DashboardLayout({
           ],
         } as NavItem]
       : []),
-    { label: "SMS Gönderimi", href: "#", icon: <Send className="h-5 w-5" />, disabled: true },
-    { label: "Raporlar", href: "#", icon: <BarChart3 className="h-5 w-5" />, disabled: true },
+    {
+      label: "SMS Gönderim Merkezi",
+      href: "/customer/sms",
+      icon: <Send className="h-5 w-5" />,
+      children: [
+        { label: "SMS Gönderim", href: "/customer/sms", icon: <Send className="h-4 w-4" />, exact: true },
+        { label: "Şablonlar", href: "/customer/sms/templates", icon: <FileText className="h-4 w-4" /> },
+      ],
+    },
+    { label: "Raporlar", href: "/customer/sms", icon: <BarChart3 className="h-5 w-5" />, exact: true },
     { label: "Bakiye", href: "#", icon: <CreditCard className="h-5 w-5" />, disabled: true },
   ];
 

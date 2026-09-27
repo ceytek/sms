@@ -50,6 +50,36 @@ services:
       AI_SERVICE_URL: http://ai-service:8000
       FRONTEND_URL: ${FRONTEND_URL}
       PORT: 3001
+      SMS_PROVIDER_MODE: ${SMS_PROVIDER_MODE:-mock}
+      SMS_WEBHOOK_TOKEN: ${SMS_WEBHOOK_TOKEN:-}
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  sms-worker:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: sms-worker
+    restart: unless-stopped
+    command: ["node", "dist/sms-worker.js"]
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: ${DATABASE_USER:-sms_user}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME:-sms_db}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY}
+      NODE_ENV: production
+      SMS_WORKER: "1"
+      SMS_PROVIDER_MODE: ${SMS_PROVIDER_MODE:-mock}
     volumes:
       - backend_uploads:/app/uploads
     depends_on:

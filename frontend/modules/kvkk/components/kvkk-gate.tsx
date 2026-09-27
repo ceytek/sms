@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Building2, CalendarDays, Loader2 } from "lucide-react";
 import { authService } from "@/modules/auth";
 import { kvkkService } from "../services/kvkk.service";
 import type { KvkkStatus } from "../types";
@@ -43,18 +43,27 @@ export function KvkkGate({ children }: { children: React.ReactNode }) {
     <>
       {term?.startDate || term?.endDate ? (
         <div className="mx-auto max-w-5xl px-4 pt-6 md:px-6">
-          <div className={`rounded-2xl border px-4 py-3 text-sm ${term?.expired ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}>
-            <p className="font-semibold">KVKK hizmet dönemi</p>
-            <p className="mt-1">
-              Başlangıç <span className="font-medium">{formatDate(term?.startDate)}</span>
-              {" · "}
-              Bitiş <span className="font-medium">{formatDate(term?.endDate)}</span>
-              {term?.expired
-                ? " · vadesi doldu"
-                : term?.daysLeft != null
-                  ? ` · ${term.daysLeft} gün kaldı`
-                  : ""}
-            </p>
+          <div className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${term?.expired ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}>
+            <div className="flex items-center gap-3">
+              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${term?.expired ? "bg-amber-100 text-amber-700" : "bg-blue-50 text-blue-600"}`}>
+                <Building2 className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">KVKK hizmet dönemi</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Başlangıç {formatDate(term?.startDate)} · Bitiş {formatDate(term?.endDate)}
+                  {term?.expired
+                    ? " · vadesi doldu"
+                    : term?.daysLeft != null
+                      ? ` · ${term.daysLeft} gün kaldı`
+                      : ""}
+                </p>
+              </div>
+            </div>
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${term?.expired ? "bg-amber-100 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>
+              <CalendarDays className="h-3.5 w-3.5" />
+              {term?.expired ? "Süresi doldu" : "Aktif dönem"}
+            </span>
           </div>
         </div>
       ) : null}

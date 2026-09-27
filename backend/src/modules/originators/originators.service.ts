@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { CompanyOriginator } from '../companies/entities/company-originator.entity.js';
 import { Company } from '../companies/entities/company.entity.js';
 import { BannedOriginator } from './entities/banned-originator.entity.js';
@@ -16,7 +16,7 @@ import { Role } from '../../common/enums/role.enum.js';
 import { InboxEventType } from '../../common/enums/inbox-event-type.enum.js';
 import { InboxService } from '../inbox/inbox.service.js';
 import { OriginatorQueryDto, OriginatorCompanyQueryDto } from './dto/originator-query.dto.js';
-import { normalizeOriginatorName } from './originator-name.js';
+import { normalizeOriginatorName, originatorNameKey } from './originator-name.js';
 
 type Actor = { id: string; role: string; companyId: string };
 
@@ -35,12 +35,13 @@ export class OriginatorsService {
   ) {}
 
   async assertNotBanned(names: string[]) {
-    const normalized = [...new Set(names.map(normalizeOriginatorName).filter(Boolean))];
-    if (!normalized.length) return;
+    const keys = [...new Set(names.map(originatorNameKey).filter(Boolean))];
+    if (!keys.length) return;
 
-    const banned = await this.bannedRepository.find({
-      where: { name: In(normalized) },
-    });
+    const banned = await this.bannedRepository
+      .createQueryBuilder('banned')
+      .where('LOWER(banned.name) IN (:...keys)', { keys: keys.map((key) => key.toLowerCase()) })
+      .getMany();
     if (banned.length) {
       throw new BadRequestException(
         `Yasaklı başlık: ${banned.map((item) => item.name).join(', ')}`,
@@ -255,9 +256,7 @@ export class OriginatorsService {
       throw new NotFoundException('Firma bulunamadı');
     }
 
-    const existing = await this.originatorRepository.findOne({
-      where: { companyId: company.id, name },
-    });
+    const existing = await this.findOriginatorByName(company.id, name);
     if (existing) {
       throw new ConflictException('Bu başlık zaten kayıtlı');
     }
@@ -308,9 +307,7 @@ export class OriginatorsService {
       throw new ForbiddenException();
     }
 
-    const existing = await this.originatorRepository.findOne({
-      where: { companyId: company.id, name },
-    });
+    const existing = await this.findOriginatorByName(company.id, name);
     if (existing) {
       throw new ConflictException('Bu firma için aynı başlık zaten kayıtlı');
     }
@@ -381,7 +378,7 @@ export class OriginatorsService {
       throw new BadRequestException('Başlık adı zorunludur');
     }
 
-    const existing = await this.bannedRepository.findOne({ where: { name } });
+    const existing = await this.findBannedByName(name);
     if (existing) {
       throw new ConflictException('Bu başlık zaten yasaklı listesinde');
     }
@@ -411,7 +408,7 @@ export class OriginatorsService {
     const originator = await this.requireOriginator(id);
     const name = originator.name;
 
-    let banned = await this.bannedRepository.findOne({ where: { name } });
+    let banned = await this.findBannedByName(name);
     if (!banned) {
       banned = await this.bannedRepository.save(
         this.bannedRepository.create({
@@ -448,10 +445,13 @@ export class OriginatorsService {
   }
 
   private async passivateAndNotifyBanned(name: string, user: Actor) {
-    const affected = await this.originatorRepository.find({
-      where: { name },
-      relations: ['company', 'company.dealerCompany'],
-    });
+    const affected = await this.originatorRepository
+      .createQueryBuilder('originator')
+      .leftJoinAndSelect('originator.company', 'company')
+      .leftJoinAndSelect('company.dealerCompany', 'dealer')
+      .where('LOWER(originator.name) = LOWER(:name)', { name })
+      .andWhere('originator.deletedAt IS NULL')
+      .getMany();
     await this.passivateByName(name, user.id);
     for (const originator of affected) {
       await this.emitInbox(InboxEventType.ORIGINATOR_BANNED, user, originator);
@@ -497,9 +497,25 @@ export class OriginatorsService {
       .createQueryBuilder()
       .update()
       .set({ status: OriginatorStatus.PASSIVE, updatedBy: userId })
-      .where('name = :name', { name })
+      .where('LOWER(name) = LOWER(:name)', { name })
       .andWhere('deleted_at IS NULL')
       .execute();
+  }
+
+  private findOriginatorByName(companyId: string, name: string) {
+    return this.originatorRepository
+      .createQueryBuilder('originator')
+      .where('originator.companyId = :companyId', { companyId })
+      .andWhere('LOWER(originator.name) = LOWER(:name)', { name })
+      .andWhere('originator.deletedAt IS NULL')
+      .getOne();
+  }
+
+  private findBannedByName(name: string) {
+    return this.bannedRepository
+      .createQueryBuilder('banned')
+      .where('LOWER(banned.name) = LOWER(:name)', { name })
+      .getOne();
   }
 
   private async requireOriginator(id: string) {

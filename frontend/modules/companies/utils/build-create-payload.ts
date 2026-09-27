@@ -27,7 +27,7 @@ export function buildCreateCompanyPayload(data: CompanyWizardData): CreateCompan
     payload.smsAccounts = [{
       providerId: data.smsProviderId,
       isActive: true,
-      applyToSubAccounts: false,
+      applyToSubAccounts: data.accountType === "DEALER",
       noRouting: false,
     }];
     if (data.enableCreditRefund) {

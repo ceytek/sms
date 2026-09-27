@@ -61,6 +61,11 @@ export interface ContactSummary {
   smsBlocked?: number;
   groupCount: number;
   canImportFromCompanies: boolean;
+  createdThisMonth?: number;
+  createdPrevMonth?: number;
+  taggedContacts?: number;
+  taggedThisMonth?: number;
+  taggedPrevMonth?: number;
 }
 
 export interface ContactGroupRecord {
@@ -70,6 +75,8 @@ export interface ContactGroupRecord {
   parentId?: string | null;
   isActive: boolean;
   memberCount: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ContactTagRecord {
@@ -77,6 +84,8 @@ export interface ContactTagRecord {
   name: string;
   isActive: boolean;
   memberCount: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ContactCustomFieldRecord {
@@ -85,6 +94,7 @@ export interface ContactCustomFieldRecord {
   fieldType: ContactCustomFieldType;
   sortOrder: number;
   isActive: boolean;
+  createdAt?: string;
 }
 
 export interface ImportErrorRow {

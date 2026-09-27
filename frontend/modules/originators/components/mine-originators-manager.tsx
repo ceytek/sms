@@ -101,10 +101,13 @@ export function MineOriginatorsManager() {
         <div className="mb-4 flex gap-2">
           <Input
             value={name}
-            onChange={(event) => setName(event.target.value.toUpperCase())}
+            onChange={(event) => setName(event.target.value)}
             maxLength={11}
             placeholder="Yeni başlık"
             className="max-w-xs font-mono"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
           />
           <Button onClick={() => void handleAdd()} disabled={!name.trim() || adding}>
             {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}

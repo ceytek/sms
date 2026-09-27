@@ -1,3 +1,7 @@
 export function normalizeOriginatorName(name: string) {
-  return name.trim().toUpperCase().replace(/\s+/g, '');
+  return String(name || '').trim().replace(/\s+/g, '');
+}
+
+export function originatorNameKey(name: string) {
+  return normalizeOriginatorName(name).toUpperCase();
 }

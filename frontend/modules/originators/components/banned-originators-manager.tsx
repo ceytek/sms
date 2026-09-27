@@ -97,10 +97,13 @@ export function BannedOriginatorsManager() {
         <div className="mb-5 grid gap-3 sm:grid-cols-[160px_1fr_auto]">
           <Input
             value={bannedName}
-            onChange={(event) => setBannedName(event.target.value.toUpperCase())}
+            onChange={(event) => setBannedName(event.target.value)}
             maxLength={11}
-            placeholder="YASAKLIADI"
+            placeholder="Yasaklı ad"
             className="font-mono"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
           />
           <Input
             value={bannedReason}

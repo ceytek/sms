@@ -7,6 +7,14 @@ export interface SmsProviderDetail {
   isActive: boolean;
   companyCount?: number;
   configSchema?: Record<string, unknown>;
+  platformUsername?: string;
+  hasPlatformPassword?: boolean;
+  rateLimits?: {
+    requestPerSecond?: number;
+    messagePerSecond?: number;
+    maxBatchSize?: number;
+    batchesPerSecond?: number;
+  };
   createdAt: string;
 }
 
@@ -32,7 +40,15 @@ export const providerService = {
     return apiRequest<SmsProviderDetail>("admin/providers", { method: "POST", body: data });
   },
 
-  async update(id: string, data: { code?: string; name?: string; isActive?: boolean }): Promise<SmsProviderDetail> {
+  async update(id: string, data: {
+    code?: string;
+    name?: string;
+    isActive?: boolean;
+    configSchema?: Record<string, unknown>;
+    rateLimits?: SmsProviderDetail["rateLimits"];
+    username?: string;
+    password?: string;
+  }): Promise<SmsProviderDetail> {
     return apiRequest<SmsProviderDetail>(`admin/providers/${id}`, { method: "PATCH", body: data });
   },
 

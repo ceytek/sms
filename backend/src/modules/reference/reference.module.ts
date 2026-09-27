@@ -9,10 +9,12 @@ import { CustomerCategory } from './entities/customer-category.entity.js';
 import { CustomerSubcategory } from './entities/customer-subcategory.entity.js';
 import { PriceList } from '../pricing/entities/price-list.entity.js';
 import { CompanySmsAccount } from '../companies/entities/company-sms-account.entity.js';
+import { Company } from '../companies/entities/company.entity.js';
 import { ReferenceController } from './reference.controller.js';
 import { ProviderController } from './provider.controller.js';
 import { ReferenceService } from './reference.service.js';
 import { AuthModule } from '../auth/auth.module.js';
+import { CredentialsModule } from '../credentials/credentials.module.js';
 
 @Module({
   imports: [
@@ -26,8 +28,10 @@ import { AuthModule } from '../auth/auth.module.js';
       CustomerSubcategory,
       PriceList,
       CompanySmsAccount,
+      Company,
     ]),
     AuthModule,
+    CredentialsModule,
   ],
   controllers: [ReferenceController, ProviderController],
   providers: [ReferenceService],

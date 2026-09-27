@@ -319,10 +319,13 @@ export function OriginatorsManager({ userRole }: { userRole: string }) {
               <div className="flex gap-2">
                 <Input
                   value={newName}
-                  onChange={(event) => setNewName(event.target.value.toUpperCase())}
+                  onChange={(event) => setNewName(event.target.value)}
                   maxLength={11}
                   placeholder="Yeni başlık"
                   className="font-mono"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                 />
                 <Button onClick={() => void handleAdd()} disabled={!newName.trim() || adding}>
                   {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}

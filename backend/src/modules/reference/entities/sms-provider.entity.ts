@@ -22,6 +22,14 @@ export class SmsProvider {
   @Column({ name: 'config_schema', type: 'jsonb', nullable: true })
   configSchema?: Record<string, unknown>;
 
+  @Column({ name: 'rate_limits', type: 'jsonb', nullable: true })
+  rateLimits?: {
+    requestPerSecond?: number;
+    messagePerSecond?: number;
+    maxBatchSize?: number;
+    batchesPerSecond?: number;
+  };
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

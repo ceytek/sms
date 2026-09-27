@@ -23,6 +23,7 @@ export class ServiceTermReminderJob implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
+    if (process.env.SMS_WORKER === '1') return;
     this.timeout = setTimeout(() => {
       void this.run();
       this.interval = setInterval(() => void this.run(), INTERVAL_MS);

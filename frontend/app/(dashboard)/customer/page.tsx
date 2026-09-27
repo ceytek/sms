@@ -59,11 +59,13 @@ export default function CustomerDashboard() {
       ) : null}
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <PlaceholderCard
-          icon={<Send className="h-6 w-6 text-blue-500" />}
-          title="SMS Gönderimi"
-          description="Yakında aktif olacak"
-        />
+        <Link href="/customer/sms">
+          <PlaceholderCard
+            icon={<Send className="h-6 w-6 text-blue-500" />}
+            title="SMS Gönderim Merkezi"
+            description="Toplu SMS kampanyası oluşturun"
+          />
+        </Link>
         <Link href="/customer/contacts">
           <PlaceholderCard
             icon={<Users className="h-6 w-6 text-emerald-500" />}

@@ -52,6 +52,22 @@ export class CredentialsService {
     return repo.save(credential);
   }
 
+  async has(
+    companyId: string,
+    credentialType: CredentialType,
+    entityType: string,
+    entityId: string,
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    const repo = manager
+      ? manager.getRepository(CompanyCredential)
+      : this.credentialRepository;
+    const count = await repo.count({
+      where: { companyId, credentialType, entityType, entityId },
+    });
+    return count > 0;
+  }
+
   async retrieve(
     companyId: string,
     credentialType: CredentialType,

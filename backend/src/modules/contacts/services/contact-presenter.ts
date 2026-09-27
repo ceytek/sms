@@ -39,6 +39,7 @@ export function toGroupDto(group: ContactGroup, memberCount = 0) {
     isActive: group.isActive,
     memberCount,
     createdAt: group.createdAt,
+    updatedAt: group.updatedAt,
   };
 }
 
@@ -49,6 +50,7 @@ export function toTagDto(tag: ContactTag, memberCount = 0) {
     isActive: tag.isActive,
     memberCount,
     createdAt: tag.createdAt,
+    updatedAt: tag.updatedAt,
   };
 }
 

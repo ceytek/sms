@@ -31,6 +31,14 @@ export default function ProvidersPage() {
   const [editingProvider, setEditingProvider] = useState<SmsProviderDetail | null>(null);
   const [formCode, setFormCode] = useState("");
   const [formName, setFormName] = useState("");
+  const [formBaseUrl, setFormBaseUrl] = useState("");
+  const [formTimeoutMs, setFormTimeoutMs] = useState("15000");
+  const [formMaxBatch, setFormMaxBatch] = useState("100");
+  const [formReqPerSec, setFormReqPerSec] = useState("10");
+  const [formMsgPerSec, setFormMsgPerSec] = useState("50");
+  const [formUsername, setFormUsername] = useState("");
+  const [formPassword, setFormPassword] = useState("");
+  const [formHasPassword, setFormHasPassword] = useState(false);
   const [formActive, setFormActive] = useState(true);
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -67,6 +75,14 @@ export default function ProvidersPage() {
     setEditingProvider(null);
     setFormCode("");
     setFormName("");
+    setFormBaseUrl("");
+    setFormTimeoutMs("15000");
+    setFormMaxBatch("100");
+    setFormReqPerSec("10");
+    setFormMsgPerSec("50");
+    setFormUsername("");
+    setFormPassword("");
+    setFormHasPassword(false);
     setFormActive(true);
     setDialogOpen(true);
   };
@@ -75,6 +91,15 @@ export default function ProvidersPage() {
     setEditingProvider(provider);
     setFormCode(provider.code);
     setFormName(provider.name);
+    const api = (provider.configSchema as { api?: { baseUrl?: string; timeoutMs?: number } } | undefined)?.api;
+    setFormBaseUrl(typeof api?.baseUrl === "string" ? api.baseUrl : "");
+    setFormTimeoutMs(String(api?.timeoutMs ?? 15000));
+    setFormMaxBatch(String(provider.rateLimits?.maxBatchSize ?? 100));
+    setFormReqPerSec(String(provider.rateLimits?.requestPerSecond ?? 10));
+    setFormMsgPerSec(String(provider.rateLimits?.messagePerSecond ?? 50));
+    setFormUsername(provider.platformUsername ?? "");
+    setFormPassword("");
+    setFormHasPassword(Boolean(provider.hasPlatformPassword));
     setFormActive(provider.isActive);
     setDialogOpen(true);
   };
@@ -88,6 +113,31 @@ export default function ProvidersPage() {
           code: formCode,
           name: formName,
           isActive: formActive,
+          configSchema: {
+            ...(editingProvider.configSchema ?? {}),
+            api: {
+              ...((editingProvider.configSchema as { api?: Record<string, unknown> } | undefined)?.api ?? {}),
+              baseUrl: formBaseUrl.trim(),
+              sendPath: "/sms/create",
+              reportPath: "/sms/list",
+              detailReportPath: "/sms/list-item",
+              summaryPath: "/sms/summary",
+              sendersPath: "/sms/list-sender",
+              gatewaysPath: "/sms/list-gateway",
+              creditPath: "/user/credit",
+              creditMethod: "GET",
+              timeoutMs: Number(formTimeoutMs) || 15000,
+              auth: "basic",
+            },
+          },
+          rateLimits: {
+            ...(editingProvider.rateLimits ?? {}),
+            maxBatchSize: Number(formMaxBatch) || 100,
+            requestPerSecond: Number(formReqPerSec) || 10,
+            messagePerSecond: Number(formMsgPerSec) || 50,
+          },
+          username: formUsername.trim() || undefined,
+          password: formPassword.trim() || undefined,
         });
       } else {
         await providerService.create({
@@ -252,7 +302,7 @@ export default function ProvidersPage() {
             className="fixed inset-0 bg-black/50"
             onClick={() => setDialogOpen(false)}
           />
-          <div className="relative z-50 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <div className="relative z-50 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-semibold text-slate-900">
                 {editingProvider ? "Sağlayıcı Düzenle" : "Yeni Sağlayıcı"}
@@ -286,6 +336,88 @@ export default function ProvidersPage() {
                   required
                 />
               </div>
+              {editingProvider && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="providerBaseUrl">API adresi</Label>
+                    <Input
+                      id="providerBaseUrl"
+                      value={formBaseUrl}
+                      onChange={(e) => setFormBaseUrl(e.target.value)}
+                      placeholder="https://panel.example.com:9588"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="providerUsername">API kullanıcı adı</Label>
+                      <Input
+                        id="providerUsername"
+                        value={formUsername}
+                        onChange={(e) => setFormUsername(e.target.value)}
+                        autoComplete="off"
+                        placeholder="VoiceTelekom kullanıcı adı"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="providerPassword">API şifresi</Label>
+                      <Input
+                        id="providerPassword"
+                        type="password"
+                        value={formPassword}
+                        onChange={(e) => setFormPassword(e.target.value)}
+                        autoComplete="new-password"
+                        placeholder={formHasPassword ? "Kayıtlı — değiştirmek için yazın" : "VoiceTelekom şifresi"}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    VoiceTelekom panelindeki gerçek API kullanıcısı. Dokümandaki örnek (`smsuser` / örnek şifre) çalışmaz.
+                    İstekler Basic Auth header ile gider; şifre query string’de durmaz.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="providerTimeout">İstek zaman aşımı (ms)</Label>
+                      <Input
+                        id="providerTimeout"
+                        type="number"
+                        min={1000}
+                        value={formTimeoutMs}
+                        onChange={(e) => setFormTimeoutMs(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="providerBatch">Batch limiti</Label>
+                      <Input
+                        id="providerBatch"
+                        type="number"
+                        min={1}
+                        value={formMaxBatch}
+                        onChange={(e) => setFormMaxBatch(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="providerReq">İstek / sn</Label>
+                      <Input
+                        id="providerReq"
+                        type="number"
+                        min={1}
+                        value={formReqPerSec}
+                        onChange={(e) => setFormReqPerSec(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="providerMsg">Mesaj / sn</Label>
+                      <Input
+                        id="providerMsg"
+                        type="number"
+                        min={1}
+                        value={formMsgPerSec}
+                        onChange={(e) => setFormMsgPerSec(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
               <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
                 <Label htmlFor="providerActive" className="cursor-pointer">
                   Aktif

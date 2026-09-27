@@ -1,0 +1,8 @@
+export enum SmsBatchStatus {
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
+  ACCEPTED = 'ACCEPTED',
+  FAILED = 'FAILED',
+  DEAD = 'DEAD',
+  CANCELLED = 'CANCELLED',
+}

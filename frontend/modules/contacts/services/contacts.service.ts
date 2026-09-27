@@ -55,6 +55,13 @@ export const contactsService = {
   remove(id: string) {
     return apiRequest<{ id: string }>(`contacts/${id}`, { method: "DELETE" });
   },
+  smsHistory(id: string, page = 1) {
+    return apiRequest<{
+      contact: { id: string; name?: string | null; phone: string };
+      items: ContactSmsHistoryItem[];
+      meta: { page: number; limit: number; total: number; totalPages: number };
+    }>(`contacts/${id}/sms-history?page=${page}`);
+  },
 
   bulkAction(data: {
     action: ContactBulkAction;
@@ -79,6 +86,17 @@ export const contactsService = {
     link.click();
     URL.revokeObjectURL(url);
   },
+};
+
+export type ContactSmsHistoryItem = {
+  id: string;
+  campaignId: string;
+  sentAt?: string;
+  originatorName?: string;
+  status: string;
+  excludeReason?: string;
+  body?: string;
+  smsParts: number;
 };
 
 export type ContactFilterState = {

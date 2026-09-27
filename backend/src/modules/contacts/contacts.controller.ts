@@ -55,6 +55,16 @@ export class ContactsController {
     return this.contactsService.bulkAction(dto, user);
   }
 
+  @Get(':id/sms-history')
+  smsHistory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('page') page: string | undefined,
+    @Query('limit') limit: string | undefined,
+    @CurrentUser() user: ContactActor,
+  ) {
+    return this.contactsService.smsHistory(id, user, Number(page) || 1, Number(limit) || 20);
+  }
+
   @Get(':id')
   getOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: ContactActor) {
     return this.contactsService.getOne(id, user);

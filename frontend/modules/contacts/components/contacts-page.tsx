@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Ban,
@@ -32,6 +33,7 @@ import { contactTagsService } from "../services/tags.service";
 import { contactCustomFieldsService } from "../services/custom-fields.service";
 import { contactImportsService } from "../services/imports.service";
 import { ContactFormDialog } from "./contact-form-dialog";
+import { ContactSmsHistoryDialog } from "./contact-sms-history-dialog";
 import { ExcelImportDialog } from "./excel-import-dialog";
 import { BulkNumbersDialog } from "./bulk-numbers-dialog";
 import { CompanyImportDialog } from "./company-import-dialog";
@@ -54,9 +56,10 @@ import {
   selectClass,
 } from "../types";
 
-type Dialog = "create" | "edit" | "excel" | "bulk" | "company" | null;
+type Dialog = "create" | "edit" | "excel" | "bulk" | "company" | "history" | null;
 
 export function ContactsPage() {
+  const searchParams = useSearchParams();
   const [items, setItems] = useState<ContactRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -66,8 +69,8 @@ export function ContactsPage() {
   const [customFields, setCustomFields] = useState<ContactCustomFieldRecord[]>([]);
   const [jobs, setJobs] = useState<ImportJobRecord[]>([]);
   const [search, setSearch] = useState("");
-  const [groupId, setGroupId] = useState("");
-  const [tagId, setTagId] = useState("");
+  const [groupId, setGroupId] = useState(searchParams.get("groupId") ?? "");
+  const [tagId, setTagId] = useState(searchParams.get("tagId") ?? "");
   const [source, setSource] = useState<ContactSource | "ALL">("ALL");
   const [status, setStatus] = useState<ContactStatus | "ALL">("ALL");
   const [selected, setSelected] = useState<string[]>([]);
@@ -260,7 +263,10 @@ export function ContactsPage() {
                   <TableCell>{CONTACT_SOURCE_LABELS[item.source]}</TableCell>
                   <TableCell><ContactStatusBadge status={item.status} /></TableCell>
                   <TableCell>
-                    <Button size="sm" variant="ghost" onClick={() => { setEditing(item); setDialog("edit"); }}>Düzenle</Button>
+                    <div className="flex justify-end gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => { setEditing(item); setDialog("history"); }}>Geçmiş</Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setEditing(item); setDialog("edit"); }}>Düzenle</Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -341,6 +347,9 @@ export function ContactsPage() {
       )}
       {dialog === "bulk" && <BulkNumbersDialog groups={groups} onClose={() => setDialog(null)} onDone={() => { setDialog(null); void load(); }} />}
       {dialog === "company" && <CompanyImportDialog groups={groups} onClose={() => setDialog(null)} onDone={() => { setDialog(null); void load(); }} />}
+      {dialog === "history" && editing && (
+        <ContactSmsHistoryDialog contact={editing} onClose={() => { setDialog(null); setEditing(null); }} />
+      )}
     </div>
   );
 }
