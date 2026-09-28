@@ -63,9 +63,11 @@ export class SmsWorkerHost implements OnModuleDestroy {
           if (job.name === SMS_JOB.RECONCILE) {
             if (job.data.all) {
               await this.reconcileStuck();
+              await this.refreshDeliveries();
               return;
             }
             await this.reconcileStuck(job.data.campaignId);
+            await this.refreshDeliveries(job.data.campaignId);
             return;
           }
           await this.prepare.prepare(job.data.campaignId);
@@ -85,6 +87,17 @@ export class SmsWorkerHost implements OnModuleDestroy {
     }
     await this.queue.ensureStuckReconcileRepeat();
     this.logger.log('SMS workers started');
+  }
+
+  private async refreshDeliveries(campaignId?: string) {
+    try {
+      const result = await this.send.refreshDeliveries(campaignId);
+      if (result.updated) {
+        this.logger.log(`Teslimat raporu guncellendi: ${result.updated}/${result.checked}`);
+      }
+    } catch (err) {
+      this.logger.warn(`Teslimat raporu okunamadi: ${err instanceof Error ? err.message : 'hata'}`);
+    }
   }
 
   private async reconcileStuck(campaignId?: string) {

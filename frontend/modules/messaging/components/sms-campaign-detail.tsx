@@ -95,7 +95,7 @@ export function SmsCampaignDetailPage({ id }: { id: string }) {
         setRowPages(res.meta?.totalPages ?? 1);
       })
       .catch(() => setRows([]));
-  }, [id, page, data?.status, data?.acceptedCount, data?.failCount, data?.queuedCount]);
+  }, [id, page, data?.status, data?.acceptedCount, data?.deliveredCount, data?.failCount, data?.queuedCount]);
 
   if (!data) {
     return (
@@ -115,13 +115,17 @@ export function SmsCampaignDetailPage({ id }: { id: string }) {
     data.validRecipientCount > 0 &&
     !creditShort;
   const pending = (data.queuedCount || 0) + (data.processingCount || 0);
+  const delivered = data.deliveredCount || 0;
+  const acceptedOnly = Math.max(0, (data.acceptedCount || 0) - delivered);
   const other =
     (data.duplicateCount || 0) +
     (data.excludedCount || 0) +
     (data.consentExcludedCount || 0) +
     (data.passiveCount || 0);
+  const allDelivered = data.validRecipientCount > 0 && delivered >= data.validRecipientCount;
   const slices = [
-    { label: "İletildi", value: data.acceptedCount || 0, color: "#10b981", dot: "bg-emerald-500" },
+    { label: "Teslim edildi", value: delivered, color: "#10b981", dot: "bg-emerald-500" },
+    { label: "Kabul edildi", value: acceptedOnly, color: "#2563eb", dot: "bg-blue-600" },
     { label: "Beklemede", value: pending, color: "#3b82f6", dot: "bg-blue-500" },
     { label: "İletilemedi", value: data.failCount || 0, color: "#f97316", dot: "bg-orange-500" },
     { label: "Geçersiz", value: data.invalidCount || 0, color: "#ef4444", dot: "bg-red-500" },
@@ -164,7 +168,7 @@ export function SmsCampaignDetailPage({ id }: { id: string }) {
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
               <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${statusTone(data.status)}`}>
                 <Check className="h-3 w-3" />
-                {campaignStatusLabel(data.status)}
+                {allDelivered ? "Teslim edildi" : campaignStatusLabel(data.status)}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
@@ -355,7 +359,7 @@ export function SmsCampaignDetailPage({ id }: { id: string }) {
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
               <Mini icon={<Users className="h-4 w-4 text-blue-600" />} label="Toplam Alıcı" value={data.validRecipientCount} hint="" />
-              <Mini icon={<Send className="h-4 w-4 text-blue-600" />} label="İletildi" value={data.acceptedCount} hint={`%${share(data.acceptedCount, data.validRecipientCount)}`} />
+              <Mini icon={<Send className="h-4 w-4 text-blue-600" />} label="Teslim edildi" value={delivered} hint={`%${share(delivered, data.validRecipientCount)}`} />
               <Mini icon={<X className="h-4 w-4 text-rose-600" />} label="İletilemedi" value={data.failCount} hint={`%${share(data.failCount, data.validRecipientCount)}`} />
               <Mini icon={<span className="text-sm text-orange-500">!</span>} label="Geçersiz" value={data.invalidCount} hint={`%${share(data.invalidCount, data.rawRecipientCount)}`} />
               <Mini icon={<Clock3 className="h-4 w-4 text-slate-500" />} label="Beklemede" value={pending} hint={`%${share(pending, data.validRecipientCount)}`} />
@@ -453,6 +457,8 @@ function Donut({ total, slices }: { total: number; slices: { value: number; colo
 
 function statusTone(status: string) {
   if (["FAILED", "REJECTED", "EXPIRED", "CANCELLED"].includes(status)) return "bg-rose-50 text-rose-700";
+  if (status === "DELIVERED") return "bg-emerald-50 text-emerald-700";
+  if (status === "ACCEPTED" || status === "SENT") return "bg-blue-50 text-blue-700";
   if (["QUEUED", "PROCESSING", "SENDING"].includes(status)) return "bg-amber-50 text-amber-700";
   if (["DRAFT", "READY", "PREPARING", "SCHEDULED", "EXCLUDED", "INVALID", "DUPLICATE"].includes(status)) {
     return "bg-slate-100 text-slate-600";

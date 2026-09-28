@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { hasPersonalization, renderSmsTemplate, smsEncodingAndParts } from './sms-text.js';
-import { DELIVERY_ALLOWED_FROM, mapCallbackStatus, normalizeWebhookPayload } from './sms-callback.js';
+import {
+  DELIVERY_ALLOWED_FROM,
+  mapCallbackStatus,
+  mapProviderItemState,
+  normalizeWebhookPayload,
+} from './sms-callback.js';
 import { SmsRecipientStatus } from '../../common/enums/sms-recipient-status.enum.js';
 import { DEFAULT_RATE_LIMITS, ProviderRateLimiter } from './queue/provider-rate-limiter.js';
 import { extractPhonesFromMatrix } from './sms-file-phones.js';
@@ -39,6 +44,19 @@ describe('callback mapping', () => {
 
   it('does not allow delivered-to-accepted downgrade', () => {
     expect(DELIVERY_ALLOWED_FROM[SmsRecipientStatus.ACCEPTED]).not.toContain(SmsRecipientStatus.DELIVERED);
+  });
+
+  it('maps VoiceTelekom item states and ignores package states', () => {
+    expect(mapProviderItemState('3')).toEqual({ status: SmsRecipientStatus.DELIVERED });
+    expect(mapProviderItemState(2)?.status).toBe(SmsRecipientStatus.SENT);
+    expect(mapProviderItemState('4')?.status).toBe(SmsRecipientStatus.FAILED);
+    expect(mapProviderItemState('5')?.status).toBe(SmsRecipientStatus.EXPIRED);
+    expect(mapProviderItemState('-1')?.status).toBe(SmsRecipientStatus.REJECTED);
+    expect(mapProviderItemState('-2')?.status).toBe(SmsRecipientStatus.FAILED);
+    expect(mapProviderItemState('0')).toBeNull();
+    expect(mapProviderItemState('1')).toBeNull();
+    expect(mapProviderItemState('6')).toBeNull();
+    expect(mapProviderItemState('-3')).toBeNull();
   });
 
   it('reads customID and keeps raw provider state without mapping it', () => {

@@ -12,6 +12,22 @@ export function mapCallbackStatus(status?: string): SmsRecipientStatus | null {
   return null;
 }
 
+/** VoiceTelekom item states. Package states (4, 6, -3, …) stay unmapped. */
+export function mapProviderItemState(state?: string | number | null): {
+  status: SmsRecipientStatus;
+  error?: string;
+} | null {
+  if (state === undefined || state === null || state === '') return null;
+  const value = String(state).trim();
+  if (value === '2') return { status: SmsRecipientStatus.SENT };
+  if (value === '3') return { status: SmsRecipientStatus.DELIVERED };
+  if (value === '4') return { status: SmsRecipientStatus.FAILED, error: 'Numaraya iletilemedi' };
+  if (value === '5') return { status: SmsRecipientStatus.EXPIRED, error: 'Zamanaşımına uğradı' };
+  if (value === '-1') return { status: SmsRecipientStatus.REJECTED, error: 'Operatör tarafından reddedildi' };
+  if (value === '-2') return { status: SmsRecipientStatus.FAILED, error: 'İptal edildi' };
+  return null;
+}
+
 export function normalizeWebhookPayload(body: Record<string, unknown>) {
   const nested = (body.data && typeof body.data === 'object' ? body.data : body) as Record<string, unknown>;
   const clientReference = firstString(
@@ -64,6 +80,7 @@ export const DELIVERY_ALLOWED_FROM: Partial<Record<SmsRecipientStatus, SmsRecipi
   [SmsRecipientStatus.FAILED]: [
     SmsRecipientStatus.PROCESSING,
     SmsRecipientStatus.ACCEPTED,
+    SmsRecipientStatus.SENT,
     SmsRecipientStatus.QUEUED,
     SmsRecipientStatus.INCLUDED,
   ],
@@ -75,6 +92,7 @@ export const DELIVERY_ALLOWED_FROM: Partial<Record<SmsRecipientStatus, SmsRecipi
   [SmsRecipientStatus.REJECTED]: [
     SmsRecipientStatus.PROCESSING,
     SmsRecipientStatus.ACCEPTED,
+    SmsRecipientStatus.SENT,
     SmsRecipientStatus.INCLUDED,
     SmsRecipientStatus.QUEUED,
   ],

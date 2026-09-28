@@ -469,9 +469,9 @@ export class SmsCampaignService {
            WHERE created_at >= date_trunc('month', now()) - interval '1 month'
              AND created_at < date_trunc('month', now())
          ), 0)::int AS recipients_prev,
-         COALESCE(SUM(accepted_count), 0)::int AS delivered,
+         COALESCE(SUM(delivered_count), 0)::int AS delivered,
          COALESCE(SUM(fail_count), 0)::int AS failed,
-         COALESCE(SUM(queued_count + processing_count), 0)::int AS pending
+         COALESCE(SUM(queued_count + processing_count + GREATEST(accepted_count - delivered_count, 0)), 0)::int AS pending
        FROM sms_campaigns
        WHERE sender_company_id = $1`,
       [companyId],

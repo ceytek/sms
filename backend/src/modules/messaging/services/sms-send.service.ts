@@ -17,10 +17,12 @@ import {
   RetryableProviderError,
   PermanentProviderError,
   type ProviderCallConfig,
+  type ProviderSmsDetail,
 } from '../adapters/sms-provider.adapter.js';
-import { toSmsContentEncoding } from '../adapters/provider-ids.js';
+import { toProviderXid, toSmsContentEncoding } from '../adapters/provider-ids.js';
 import { KOCAELI_API_PATHS } from '../adapters/kocaeli-paths.js';
 import { sanitizeProviderError } from '../adapters/provider-http.client.js';
+import { mapProviderItemState } from '../sms-callback.js';
 import { CampaignStateService } from './campaign-state.service.js';
 import { SmsBalanceService } from './sms-balance.service.js';
 import { CredentialsService } from '../../credentials/credentials.service.js';
@@ -322,6 +324,119 @@ export class SmsSendService {
     return originator;
   }
 
+  async refreshDeliveries(campaignId?: string) {
+    if (!isSmsProviderLiveMode()) return { checked: 0, updated: 0 };
+    const params: string[] = [];
+    let campaignFilter = '';
+    if (campaignId) {
+      params.push(campaignId);
+      campaignFilter = `AND r.campaign_id = $${params.length}::uuid`;
+    }
+    const rows = await this.dataSource.query<OpenDeliveryRow[]>(
+      `SELECT
+         r.id,
+         r.client_reference AS "clientReference",
+         r.provider_message_id AS "providerMessageId",
+         r.mobile_normalized AS "mobileNormalized",
+         r.campaign_id AS "campaignId",
+         c.sender_company_id AS "senderCompanyId",
+         c.provider_id AS "providerId",
+         c.sms_account_id AS "smsAccountId"
+       FROM sms_campaign_recipients r
+       INNER JOIN sms_campaigns c ON c.id = r.campaign_id
+       WHERE r.status IN ('ACCEPTED', 'SENT')
+         AND c.is_mock = false
+         AND NULLIF(BTRIM(r.provider_message_id), '') IS NOT NULL
+         AND r.provider_message_id NOT LIKE 'mock-%'
+         ${campaignFilter}
+         AND COALESCE(r.accepted_at, r.claimed_at, now()) > now() - interval '48 hours'
+       ORDER BY r.accepted_at ASC NULLS LAST
+       LIMIT 500`,
+      params,
+    );
+    const byAccount = new Map<string, OpenDeliveryRow[]>();
+    for (const row of rows) {
+      const key = row.smsAccountId || `company:${row.senderCompanyId}`;
+      const list = byAccount.get(key) ?? [];
+      list.push(row);
+      byAccount.set(key, list);
+    }
+    let updated = 0;
+    const touched = new Set<string>();
+    for (const group of byAccount.values()) {
+      updated += await this.refreshAccountDeliveries(group, touched);
+    }
+    for (const id of touched) {
+      await this.balance.maybeRefundIfTerminal(id);
+    }
+    return { checked: rows.length, updated };
+  }
+
+  private async refreshAccountDeliveries(rows: OpenDeliveryRow[], touched: Set<string>) {
+    const sample = rows[0];
+    const account = sample.smsAccountId
+      ? await this.dataSource.getRepository(CompanySmsAccount).findOne({ where: { id: sample.smsAccountId } })
+      : await this.smsAccounts.resolve(sample.senderCompanyId);
+    if (!account?.username) return 0;
+    const providerId = account.providerId || sample.providerId;
+    const provider = providerId
+      ? await this.dataSource.getRepository(SmsProvider).findOne({ where: { id: providerId } })
+      : null;
+    if (!provider?.code) return 0;
+    let adapter;
+    try {
+      adapter = this.registry.resolve(provider.code);
+    } catch (err) {
+      this.logger.warn(`Teslimat sorgusu atlandi: ${err instanceof Error ? err.message : 'saglayici yok'}`);
+      return 0;
+    }
+    const credentials = await this.loadCredentials(account);
+    if (!credentials.username || !credentials.password) return 0;
+    const ctx = { credentials, config: reportCallConfig(provider.configSchema) };
+    const packageIds = [...new Set(rows.map((row) => row.providerMessageId).filter(Boolean))];
+    const byPackage = new Map<string, OpenDeliveryRow[]>();
+    for (const row of rows) {
+      const list = byPackage.get(row.providerMessageId) ?? [];
+      list.push(row);
+      byPackage.set(row.providerMessageId, list);
+    }
+    let updated = 0;
+    for (let offset = 0; offset < packageIds.length; offset += 100) {
+      const ids = packageIds.slice(offset, offset + 100);
+      try {
+        await adapter.getSmsReport({ packageIds: ids, pageIndex: 0, pageSize: Math.max(ids.length, 10) }, ctx);
+      } catch (err) {
+        this.logger.warn(`Paket raporu okunamadi: ${err instanceof Error ? err.message : 'hata'}`);
+        continue;
+      }
+      for (const packageId of ids) {
+        const recipients = byPackage.get(packageId) ?? [];
+        let items: ProviderSmsDetail[] = [];
+        try {
+          items = await adapter.getSmsDetailReport({ packageId, pageSize: 1000 }, ctx);
+        } catch (err) {
+          this.logger.warn(`Kalem raporu okunamadi ${packageId}: ${err instanceof Error ? err.message : 'hata'}`);
+          continue;
+        }
+        for (const row of recipients) {
+          if (!row.clientReference) continue;
+          const item = matchDeliveryItem(row, items, recipients.length);
+          const mapped = mapProviderItemState(item?.providerState);
+          if (!mapped) continue;
+          const changed = await this.state.applyDelivery(row.clientReference, mapped.status, {
+            providerMessageId: packageId,
+            providerState: item?.providerState,
+            error: mapped.error,
+          });
+          if (!changed) continue;
+          updated += 1;
+          touched.add(row.campaignId);
+        }
+      }
+    }
+    return updated;
+  }
+
   private async loadCredentials(account: CompanySmsAccount | null) {
     const credentials: Record<string, string> = {};
     if (!account) return credentials;
@@ -342,6 +457,46 @@ export class SmsSendService {
     if (apiKey) credentials.apiKey = apiKey;
     return credentials;
   }
+}
+
+type OpenDeliveryRow = {
+  id: string;
+  clientReference: string | null;
+  providerMessageId: string;
+  mobileNormalized: string | null;
+  campaignId: string;
+  senderCompanyId: string;
+  providerId: string | null;
+  smsAccountId: string | null;
+};
+
+function reportCallConfig(schema: unknown): ProviderCallConfig {
+  const api = ((schema ?? {}) as ProviderApiSchema).api ?? {};
+  const timeoutMs = Number(api.timeoutMs || process.env.SMS_PROVIDER_TIMEOUT_MS || 15_000);
+  return {
+    baseUrl: api.baseUrl,
+    timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 15_000,
+    reportPath: api.reportPath || KOCAELI_API_PATHS.report,
+    detailReportPath: api.detailReportPath || KOCAELI_API_PATHS.detailReport,
+  };
+}
+
+function matchDeliveryItem(row: OpenDeliveryRow, items: ProviderSmsDetail[], recipientCount: number) {
+  const xid = toProviderXid(row.id).toLowerCase();
+  const byXid = items.find((item) => item.xid && item.xid.toLowerCase() === xid);
+  if (byXid) return byXid;
+  const phone = last10(row.mobileNormalized);
+  if (phone) {
+    const byPhone = items.filter((item) => last10(item.target) === phone);
+    if (byPhone.length === 1) return byPhone[0];
+  }
+  if (recipientCount === 1 && items.length === 1) return items[0];
+  return undefined;
+}
+
+function last10(value?: string | null) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : '';
 }
 
 function toCallConfig(

@@ -49,11 +49,7 @@ export class CampaignStateService {
     if (extras.providerMessageId) set.providerMessageId = extras.providerMessageId;
     if (extras.providerState) set.providerState = extras.providerState;
     if (extras.error) set.lastError = extras.error;
-    if (
-      status === SmsRecipientStatus.ACCEPTED ||
-      status === SmsRecipientStatus.SENT ||
-      status === SmsRecipientStatus.DELIVERED
-    ) {
+    if (status === SmsRecipientStatus.ACCEPTED) {
       set.acceptedAt = new Date();
     }
     if (status === SmsRecipientStatus.DELIVERED) {

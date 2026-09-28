@@ -130,10 +130,10 @@ export function SmsCampaignListPage() {
         <RateCard
           icon={<Check className="h-4 w-4" />}
           iconClass="bg-emerald-50 text-emerald-600"
-          label="İletildi"
+          label="Teslim edildi"
           value={formatCount(summary.delivered)}
           rate={rate(summary.delivered, summary.recipients)}
-          rateLabel="iletim oranı"
+          rateLabel="teslim oranı"
           color="#10b981"
         />
         <RateCard
@@ -412,12 +412,12 @@ function rowBadge(item: SmsCampaignListItem) {
   }
   const total = item.validRecipientCount || 0;
   if (total > 0 && item.deliveredCount >= total) {
-    return { label: "Tamamlandı", className: "bg-emerald-50 text-emerald-700", icon: <Check className="h-3 w-3" /> };
+    return { label: "Teslim edildi", className: "bg-emerald-50 text-emerald-700", icon: <Check className="h-3 w-3" /> };
   }
   if (total > 0 && item.failCount >= total) {
     return { label: "İletilemedi", className: "bg-rose-50 text-rose-700", icon: <X className="h-3 w-3" /> };
   }
-  return { label: "İletildi", className: "bg-blue-50 text-blue-700", icon: <Send className="h-3 w-3" /> };
+  return { label: "Kabul edildi", className: "bg-blue-50 text-blue-700", icon: <Send className="h-3 w-3" /> };
 }
 
 function rowProgress(item: SmsCampaignListItem) {
