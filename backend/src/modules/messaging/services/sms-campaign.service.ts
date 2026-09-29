@@ -90,7 +90,7 @@ export class SmsCampaignService {
       dto.sources.length === 1
         ? this.mapAudience(dto.sources[0].type)
         : SmsAudienceSource.MIXED;
-    const scheduledAt = dto.mode === 'SCHEDULE' && dto.scheduledAt ? new Date(dto.scheduledAt) : undefined;
+    const scheduledAt = dto.mode === 'SCHEDULE' ? parseScheduledAt(dto.scheduledAt) : undefined;
     if ((dto.mode === 'SCHEDULE' || dto.composition === 'SCHEDULED') && (!scheduledAt || scheduledAt.getTime() <= Date.now())) {
       throw new BadRequestException('Planlanan zaman gelecekte olmalı');
     }
@@ -165,7 +165,12 @@ export class SmsCampaignService {
     );
 
     if (dto.mode === 'SCHEDULE' && scheduledAt) {
-      await this.queue.enqueueScheduled(campaign.id, actor.companyId, scheduledAt.getTime() - Date.now());
+      await this.queue.enqueueScheduled(
+        campaign.id,
+        actor.companyId,
+        scheduledAt.getTime() - Date.now(),
+        actor.id,
+      );
     } else if (!dto.sources.some((source) => source.type === SmsCampaignSourceType.FILE && !source.phones?.length)) {
       campaign = await this.prepare.prepare(campaign.id);
     }
@@ -917,6 +922,25 @@ export class SmsCampaignService {
     return originator;
   }
 
+  async requeueDueScheduled() {
+    const due = await this.dataSource.query<Array<{ id: string; companyId: string; createdBy: string | null }>>(
+      `SELECT id, sender_company_id AS "companyId", created_by AS "createdBy"
+       FROM sms_campaigns
+       WHERE scheduled_at IS NOT NULL
+         AND confirmed_at IS NULL
+         AND cancelled_at IS NULL
+         AND status IN ('SCHEDULED', 'READY', 'PREPARING')
+         AND scheduled_at <= now()
+         AND scheduled_at > now() - interval '3 hours'
+       ORDER BY scheduled_at ASC
+       LIMIT 20`,
+    );
+    for (const row of due) {
+      await this.queue.enqueueScheduled(row.id, row.companyId, 0, row.createdBy ?? undefined);
+    }
+    return due.length;
+  }
+
   private async requireOwned(id: string, actor: Actor) {
     this.assertCompany(actor);
     const campaign = await this.dataSource.getRepository(SmsCampaign).findOne({ where: { id } });
@@ -943,6 +967,18 @@ export class SmsCampaignService {
         : 'Kampanya kaydedildi.',
     };
   }
+}
+
+const TURKEY_OFFSET = '+03:00';
+
+export function parseScheduledAt(value?: string | null) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const hasZone = /(?:z|[+-]\d{2}:?\d{2})$/i.test(trimmed);
+  const date = new Date(hasZone ? trimmed : `${trimmed}${TURKEY_OFFSET}`);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date;
 }
 
 function monthDelta(current: number, previous: number) {

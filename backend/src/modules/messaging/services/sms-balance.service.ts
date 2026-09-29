@@ -82,7 +82,7 @@ export class SmsBalanceService {
           description: 'SMS kampanya rezervasyonu',
           referenceType: 'SMS_CAMPAIGN',
           referenceId: locked.id,
-          createdBy: actorUserId,
+          createdBy: uuidOrUndefined(actorUserId),
         }),
       );
       locked.reservedUnits = units;
@@ -126,7 +126,7 @@ export class SmsBalanceService {
           description: 'SMS kampanya ek rezervasyon',
           referenceType: 'SMS_CAMPAIGN',
           referenceId: locked.id,
-          createdBy: actorUserId,
+          createdBy: uuidOrUndefined(actorUserId),
         }),
       );
       locked.reservedUnits = (locked.reservedUnits || 0) + extraUnits;
@@ -163,7 +163,7 @@ export class SmsBalanceService {
           description: 'Kullanılmayan SMS rezervasyonu iadesi',
           referenceType: 'SMS_CAMPAIGN',
           referenceId: locked.id,
-          createdBy: actorUserId,
+          createdBy: uuidOrUndefined(actorUserId),
         }),
       );
       locked.reservedUnits = usedUnits;
@@ -177,4 +177,11 @@ export class SmsBalanceService {
     const used = await this.usedUnits(campaignId);
     return this.refundUnused(campaign, used, actorUserId);
   }
+}
+
+function uuidOrUndefined(value?: string) {
+  if (!value || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+    return undefined;
+  }
+  return value;
 }

@@ -9,6 +9,7 @@ import {
 import { SmsRecipientStatus } from '../../common/enums/sms-recipient-status.enum.js';
 import { DEFAULT_RATE_LIMITS, ProviderRateLimiter } from './queue/provider-rate-limiter.js';
 import { extractPhonesFromMatrix } from './sms-file-phones.js';
+import { parseScheduledAt } from './services/sms-campaign.service.js';
 
 describe('smsEncodingAndParts', () => {
   it('uses GSM-7 single part under 160', () => {
@@ -68,6 +69,16 @@ describe('callback mapping', () => {
       status: undefined,
       providerState: '6',
     });
+  });
+});
+
+describe('parseScheduledAt', () => {
+  it('reads a clock without a timezone as Turkey time', () => {
+    expect(parseScheduledAt('2026-09-29T11:00')?.toISOString()).toBe('2026-09-29T08:00:00.000Z');
+  });
+
+  it('keeps an explicit UTC instant', () => {
+    expect(parseScheduledAt('2026-09-29T08:00:00.000Z')?.toISOString()).toBe('2026-09-29T08:00:00.000Z');
   });
 });
 

@@ -51,11 +51,11 @@ export class SmsQueueService implements OnModuleDestroy {
     await this.addOrReplace(queue, SMS_JOB.SEND_BATCH, input, `send-${input.batchId}`);
   }
 
-  async enqueueScheduled(campaignId: string, companyId: string, delayMs: number) {
+  async enqueueScheduled(campaignId: string, companyId: string, delayMs: number, actorId?: string) {
     await this.addOrReplace(
       this.scheduled,
       SMS_JOB.PREPARE,
-      { campaignId, companyId, confirmAfterPrepare: true },
+      { campaignId, companyId, actorId, confirmAfterPrepare: true },
       `scheduled-${campaignId}`,
       { delay: Math.max(0, delayMs) },
     );

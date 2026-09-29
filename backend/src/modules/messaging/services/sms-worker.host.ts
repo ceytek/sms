@@ -40,11 +40,7 @@ export class SmsWorkerHost implements OnModuleDestroy {
           const campaignId = job.data.campaignId as string;
           await this.prepare.prepare(campaignId);
           if (job.data.confirmAfterPrepare) {
-            await this.campaigns.confirm(campaignId, {
-              id: job.data.actorId || 'system',
-              role: 'CUSTOMER',
-              companyId: job.data.companyId,
-            });
+            await this.confirmScheduled(campaignId, job.data.companyId, job.data.actorId);
           }
         },
         { connection, concurrency: 2 },
@@ -64,6 +60,7 @@ export class SmsWorkerHost implements OnModuleDestroy {
             if (job.data.all) {
               await this.reconcileStuck();
               await this.refreshDeliveries();
+              await this.campaigns.requeueDueScheduled();
               return;
             }
             await this.reconcileStuck(job.data.campaignId);
@@ -71,11 +68,7 @@ export class SmsWorkerHost implements OnModuleDestroy {
             return;
           }
           await this.prepare.prepare(job.data.campaignId);
-          await this.campaigns.confirm(job.data.campaignId, {
-            id: job.data.actorId || 'system',
-            role: 'CUSTOMER',
-            companyId: job.data.companyId,
-          });
+          await this.confirmScheduled(job.data.campaignId, job.data.companyId, job.data.actorId);
         },
         { connection, concurrency: 2 },
       ),
@@ -87,6 +80,21 @@ export class SmsWorkerHost implements OnModuleDestroy {
     }
     await this.queue.ensureStuckReconcileRepeat();
     this.logger.log('SMS workers started');
+  }
+
+  private async confirmScheduled(campaignId: string, companyId?: string, actorId?: string) {
+    const campaign = await this.dataSource.getRepository(SmsCampaign).findOne({ where: { id: campaignId } });
+    if (!campaign || campaign.confirmedAt || campaign.status === 'CANCELLED') return;
+    const userId = isUuid(actorId) ? actorId : campaign.createdBy;
+    const ownerCompanyId = companyId || campaign.senderCompanyId;
+    if (!isUuid(userId) || !ownerCompanyId) {
+      throw new Error('Planlı gönderimin kullanıcı kaydı yok');
+    }
+    await this.campaigns.confirm(campaignId, {
+      id: userId as string,
+      role: 'CUSTOMER',
+      companyId: ownerCompanyId,
+    });
   }
 
   private async refreshDeliveries(campaignId?: string) {
@@ -143,4 +151,8 @@ export class SmsWorkerHost implements OnModuleDestroy {
   async onModuleDestroy() {
     await Promise.all(this.workers.map((worker) => worker.close()));
   }
+}
+
+function isUuid(value?: string | null) {
+  return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value));
 }

@@ -536,7 +536,7 @@ export function SmsSendPage() {
         originatorId,
         body: body.trim(),
         mode: kind === "SCHEDULED" ? "SCHEDULE" : "DRAFT",
-        scheduledAt: kind === "SCHEDULED" ? scheduledAt : undefined,
+        scheduledAt: kind === "SCHEDULED" ? scheduledIso(scheduledAt) : undefined,
         sources: basket.map((item) => ({
           type: item.type,
           label: item.label,
@@ -1253,6 +1253,12 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <dd className="font-medium text-slate-900">{value}</dd>
     </div>
   );
+}
+
+function scheduledIso(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toISOString();
 }
 
 function readSmsRepeat() {
