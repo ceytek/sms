@@ -114,7 +114,10 @@ export function SmsCampaignDetailPage({ id }: { id: string }) {
     !data.confirmedAt &&
     data.validRecipientCount > 0 &&
     !creditShort;
-  const pending = (data.queuedCount || 0) + (data.processingCount || 0);
+  const pending = Math.max(
+    0,
+    (data.validRecipientCount || 0) - (data.acceptedCount || 0) - (data.failCount || 0),
+  );
   const delivered = data.deliveredCount || 0;
   const acceptedOnly = Math.max(0, (data.acceptedCount || 0) - delivered);
   const other =

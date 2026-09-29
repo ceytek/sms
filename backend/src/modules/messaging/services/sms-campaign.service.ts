@@ -482,7 +482,7 @@ export class SmsCampaignService {
          ), 0)::int AS recipients_prev,
          COALESCE(SUM(delivered_count), 0)::int AS delivered,
          COALESCE(SUM(fail_count), 0)::int AS failed,
-         COALESCE(SUM(queued_count + processing_count + GREATEST(accepted_count - delivered_count, 0)), 0)::int AS pending
+         COALESCE(SUM(GREATEST(valid_recipient_count - accepted_count - fail_count, 0)), 0)::int AS pending
        FROM sms_campaigns
        WHERE sender_company_id = $1`,
       [companyId],
