@@ -459,7 +459,7 @@ function statusTone(status: string) {
   if (["FAILED", "REJECTED", "EXPIRED", "CANCELLED"].includes(status)) return "bg-rose-50 text-rose-700";
   if (status === "DELIVERED") return "bg-emerald-50 text-emerald-700";
   if (status === "ACCEPTED" || status === "SENT") return "bg-blue-50 text-blue-700";
-  if (["QUEUED", "PROCESSING", "SENDING"].includes(status)) return "bg-amber-50 text-amber-700";
+  if (["QUEUED", "PROCESSING", "SENDING", "INCLUDED"].includes(status)) return "bg-amber-50 text-amber-700";
   if (["DRAFT", "READY", "PREPARING", "SCHEDULED", "EXCLUDED", "INVALID", "DUPLICATE"].includes(status)) {
     return "bg-slate-100 text-slate-600";
   }

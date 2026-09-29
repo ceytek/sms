@@ -164,14 +164,20 @@ export class SmsCampaignService {
       },
     );
 
+    const waitingForFile = dto.sources.some(
+      (source) => source.type === SmsCampaignSourceType.FILE && !source.phones?.length,
+    );
     if (dto.mode === 'SCHEDULE' && scheduledAt) {
+      if (!waitingForFile) {
+        campaign = await this.holdSchedule(await this.prepare.prepare(campaign.id));
+      }
       await this.queue.enqueueScheduled(
         campaign.id,
         actor.companyId,
-        scheduledAt.getTime() - Date.now(),
+        Math.max(0, scheduledAt.getTime() - Date.now()),
         actor.id,
       );
-    } else if (!dto.sources.some((source) => source.type === SmsCampaignSourceType.FILE && !source.phones?.length)) {
+    } else if (!waitingForFile) {
       campaign = await this.prepare.prepare(campaign.id);
     }
 
@@ -624,8 +630,24 @@ export class SmsCampaignService {
         .where('id = :id', { id: campaign.id })
         .execute();
     }
-    await this.prepare.prepare(campaign.id);
+    const prepared = await this.prepare.prepare(campaign.id);
+    if (campaign.scheduledAt && !campaign.confirmedAt) {
+      await this.holdSchedule(prepared);
+    }
     return this.toSummary(await this.requireOwned(id, actor));
+  }
+
+  private async holdSchedule(campaign: SmsCampaign) {
+    if (!campaign.scheduledAt || campaign.confirmedAt || campaign.status === SmsCampaignStatus.CANCELLED) {
+      return campaign;
+    }
+    if (campaign.scheduledAt.getTime() <= Date.now()) return campaign;
+    await this.dataSource.getRepository(SmsCampaign).update(
+      { id: campaign.id },
+      { status: SmsCampaignStatus.SCHEDULED },
+    );
+    campaign.status = SmsCampaignStatus.SCHEDULED;
+    return campaign;
   }
 
   async retryDead(id: string, actor: Actor) {
