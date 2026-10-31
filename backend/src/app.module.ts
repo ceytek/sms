@@ -20,6 +20,8 @@ import { KvkkModule } from './modules/kvkk/kvkk.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { OriginatorRestrictionsModule } from './modules/originator-restrictions/originator-restrictions.module.js';
 import { InboxModule } from './modules/inbox/inbox.module.js';
+import { SurveyModule } from './modules/surveys/survey.module.js';
+import { FormModule } from './modules/forms/form.module.js';
 import { User } from './modules/auth/entities/user.entity.js';
 import { Company } from './modules/companies/entities/company.entity.js';
 import { CompanyContact } from './modules/companies/entities/company-contact.entity.js';
@@ -162,6 +164,8 @@ const entities = [
     NotificationsModule,
     OriginatorRestrictionsModule,
     InboxModule,
+    SurveyModule,
+    FormModule,
   ],
 })
 export class AppModule {}

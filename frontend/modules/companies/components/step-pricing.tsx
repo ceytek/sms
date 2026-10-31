@@ -102,7 +102,7 @@ export function StepPricing({
         <h3 className="text-sm font-medium text-slate-700">Hizmet Yetkileri</h3>
         <p className="text-sm text-slate-500">
           Firmaya tanımlanacak ek hizmetleri seçin. SMS tüm firmalarda zorunlu ve kapatılamaz.
-          KVKK / İzin Yönetimi isteğe bağlıdır.
+          KVKK / İzin Yönetimi ve Anket Hizmeti isteğe bağlıdır.
         </p>
 
         {optionalServices.length === 0 ? (

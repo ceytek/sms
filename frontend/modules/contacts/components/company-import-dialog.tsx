@@ -33,7 +33,7 @@ export function CompanyImportDialog({
   const [items, setItems] = useState<CompanySourceItem[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [job, setJob] = useState<ImportJobRecord | null>(null);
-  const [policy, setPolicy] = useState<ContactDuplicatePolicy>("SKIP");
+  const [policy, setPolicy] = useState<ContactDuplicatePolicy>("ADD_TO_GROUP");
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [autoGroupName, setAutoGroupName] = useState("");
   const [busy, setBusy] = useState(false);

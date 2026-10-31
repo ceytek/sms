@@ -22,6 +22,7 @@ import {
   isAnnualBilling,
   isServiceTermExpired,
   toDateOnly,
+  todayDateOnly,
 } from './service-term.js';
 import { CompanyIysSettings } from './entities/company-iys-settings.entity.js';
 import { CompanyPriceList } from './entities/company-price-list.entity.js';
@@ -677,6 +678,74 @@ export class CompaniesService {
         undefined,
         manager,
       );
+      return this.findOneInTransaction(manager, companyId);
+    });
+  }
+
+  async renewService(companyId: string, serviceId: string, actorUserId: string) {
+    return this.dataSource.transaction(async (manager) => {
+      const service = await manager.findOne(Service, { where: { id: serviceId } });
+      if (!service) throw new NotFoundException('Hizmet bulunamadı');
+      if (!isAnnualBilling(service.billingPeriod)) {
+        throw new BadRequestException('Bu hizmetin yıllık dönemi yok');
+      }
+      const assignment = await manager.findOne(CompanyService, { where: { companyId, serviceId } });
+      if (!assignment) throw new NotFoundException('Bu hizmet firmaya tanımlı değil');
+
+      const today = todayDateOnly();
+      const expired = isServiceTermExpired(assignment.endDate);
+      const oldEndDate = assignment.endDate ? toDateOnly(assignment.endDate) : null;
+
+      let term: { startsYear: number; startedAt: string; expiresAt: string };
+      if (expired || !assignment.endDate) {
+        term = buildAnnualTerm(new Date(), service.termMonths || 12);
+      } else {
+        const currentEnd = toDateOnly(assignment.endDate);
+        const endDate = new Date(currentEnd);
+        endDate.setMonth(endDate.getMonth() + (service.termMonths || 12));
+        term = {
+          startsYear: Number(currentEnd.slice(0, 4)),
+          startedAt: currentEnd,
+          expiresAt: toDateOnly(endDate),
+        };
+      }
+
+      await manager.update(
+        CompanyServiceTerm,
+        { companyServiceId: assignment.id, isCurrent: true },
+        { isCurrent: false },
+      );
+
+      assignment.startDate = expired ? term.startedAt : (assignment.startDate ?? term.startedAt);
+      assignment.endDate = term.expiresAt;
+      assignment.isActive = true;
+      await manager.save(assignment);
+
+      await manager.save(
+        manager.create(CompanyServiceTerm, {
+          companyServiceId: assignment.id,
+          companyId,
+          serviceId,
+          startsYear: term.startsYear,
+          startedAt: term.startedAt,
+          expiresAt: term.expiresAt,
+          isCurrent: true,
+          createdBy: actorUserId,
+        }),
+      );
+
+      await this.auditService.log(
+        'SERVICE_RENEW',
+        'CompanyService',
+        companyId,
+        actorUserId,
+        companyId,
+        { endDate: oldEndDate, expired },
+        { endDate: term.expiresAt, startsAt: term.startedAt },
+        undefined,
+        manager,
+      );
+
       return this.findOneInTransaction(manager, companyId);
     });
   }

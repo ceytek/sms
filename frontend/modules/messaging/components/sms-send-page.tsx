@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { creditsService } from "@/modules/credits/services/credits.service";
+import { contactCustomFieldsService } from "@/modules/contacts/services/custom-fields.service";
 import { contactGroupsService } from "@/modules/contacts/services/groups.service";
 import { contactsService } from "@/modules/contacts/services/contacts.service";
 import { originatorRestrictionsService } from "@/modules/contacts/services/originator-restrictions.service";
@@ -31,7 +32,7 @@ import { formatTrMobile, normalizeTrMobile, parseGsmNumbers } from "@/lib/phone"
 import { parseSmsSpreadsheet } from "@/lib/parse-sms-spreadsheet";
 import { previewSmsTemplate, smsEncodingAndParts, smsProgress } from "../sms-text";
 import { smsSendService, type SmsSourceType } from "../services/sms-send.service";
-import type { ContactGroupRecord, ContactRecord } from "@/modules/contacts/types";
+import type { ContactCustomFieldRecord, ContactGroupRecord, ContactRecord } from "@/modules/contacts/types";
 
 type BasketItem = {
   key: string;
@@ -70,14 +71,6 @@ const SEND_KINDS = [
     icon: Sparkles,
     tone: "bg-violet-50 text-violet-600",
   },
-  {
-    id: "SCHEDULED",
-    title: "Planlı Gönderim",
-    description: "İleri tarihli gönderim yapın.",
-    detail: "Alıcı listesi hazırlanır, gönderim seçtiğiniz tarih ve saatte başlar.",
-    icon: CalendarClock,
-    tone: "bg-indigo-50 text-indigo-600",
-  },
 ] as const;
 
 const CAMPAIGN_CATEGORIES = [
@@ -98,10 +91,10 @@ const STEPS = [
 ] as const;
 
 const VARIABLES = [
-  { token: "{firma}", label: "{firma}" },
-  { token: "{yetkili}", label: "{yetkili}" },
   { token: "{ad}", label: "{ad}" },
   { token: "{soyad}", label: "{soyad}" },
+  { token: "{firma}", label: "{firma}" },
+  { token: "{yetkili}", label: "{yetkili}" },
   { token: "{telefon}", label: "{telefon}" },
   { token: "{email}", label: "{email}" },
 ];
@@ -114,6 +107,7 @@ export function SmsSendPage() {
   const [step, setStep] = useState(1);
   const [groups, setGroups] = useState<ContactGroupRecord[]>([]);
   const [originators, setOriginators] = useState<{ id: string; name: string }[]>([]);
+  const [customFields, setCustomFields] = useState<ContactCustomFieldRecord[]>([]);
   const [templates, setTemplates] = useState<{ id: string; name: string; body: string }[]>([]);
   const [templateId, setTemplateId] = useState("");
   const [groupId, setGroupId] = useState("");
@@ -130,6 +124,7 @@ export function SmsSendPage() {
   const [campaignName, setCampaignName] = useState("");
   const [category, setCategory] = useState("DUYURU");
   const [kind, setKind] = useState<SendKind>("BULK");
+  const [sendWhen, setSendWhen] = useState<"NOW" | "LATER">("NOW");
   const [scheduledAt, setScheduledAt] = useState("");
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -155,6 +150,7 @@ export function SmsSendPage() {
 
   useEffect(() => {
     void contactGroupsService.list().then(setGroups).catch(() => setGroups([]));
+    void contactCustomFieldsService.list().then(setCustomFields).catch(() => setCustomFields([]));
     void smsSendService
       .originators()
       .then((res) => {
@@ -535,8 +531,8 @@ export function SmsSendPage() {
         composition: kind,
         originatorId,
         body: body.trim(),
-        mode: kind === "SCHEDULED" ? "SCHEDULE" : "DRAFT",
-        scheduledAt: kind === "SCHEDULED" ? scheduledIso(scheduledAt) : undefined,
+        mode: sendWhen === "LATER" ? "SCHEDULE" : "DRAFT",
+        scheduledAt: sendWhen === "LATER" ? scheduledIso(scheduledAt) : undefined,
         sources: basket.map((item) => ({
           type: item.type,
           label: item.label,
@@ -558,10 +554,12 @@ export function SmsSendPage() {
     }
   };
 
-  const canLeaveStep1 = Boolean(originatorId && campaignName.trim() && category && (kind !== "SCHEDULED" || scheduledAt));
+  const canLeaveStep1 = Boolean(originatorId && campaignName.trim() && category);
   const singlePhone = parseGsmNumbers(manual).valid;
   const canLeaveStep2 = kind === "SINGLE" ? singlePhone.length === 1 : basket.length > 0;
-  const canLeaveStep3 = Boolean(body.trim());
+  const scheduleDate = scheduledAt ? new Date(scheduledAt) : null;
+  const scheduleReady = Boolean(scheduleDate && !Number.isNaN(scheduleDate.getTime()) && scheduleDate.getTime() > Date.now());
+  const canLeaveStep3 = Boolean(body.trim()) && (sendWhen === "NOW" || scheduleReady);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -691,17 +689,6 @@ export function SmsSendPage() {
                     Gönderici başlığı alıcılara bu şekilde görünecektir.
                   </p>
                 </div>
-                {kind === "SCHEDULED" && (
-                  <div>
-                    <Label className="mb-1.5 block text-sm font-medium text-slate-700">Gönderim zamanı</Label>
-                    <input
-                      type="datetime-local"
-                      className={selectClass}
-                      value={scheduledAt}
-                      onChange={(e) => setScheduledAt(e.target.value)}
-                    />
-                  </div>
-                )}
               </div>
             </section>
           </div>
@@ -1015,7 +1002,7 @@ export function SmsSendPage() {
               <div>
                 <p className="mb-2 text-sm font-medium text-slate-700">Kullanılabilir Değişkenler:</p>
                 <div className="flex flex-wrap gap-2">
-                  {VARIABLES.map((item) => (
+                  {[...VARIABLES, ...customFields.filter((field) => field.isActive).map((field) => ({ token: `{${field.name.trim()}}`, label: `{${field.name.trim()}}` }))].map((item) => (
                     <button
                       key={item.token}
                       type="button"
@@ -1049,6 +1036,44 @@ export function SmsSendPage() {
                 </div>
                 {templateHint && <p className="mt-2 text-xs text-slate-600">{templateHint}</p>}
               </div>
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-700">Gönderim zamanı</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setSendWhen("NOW")}
+                    className={`rounded-xl border px-3 py-3 text-left ${sendWhen === "NOW" ? "border-blue-500 bg-blue-50/60" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                  >
+                    <span className="block text-sm font-semibold text-slate-900">Hemen gönder</span>
+                    <span className="mt-0.5 block text-xs text-slate-500">Onaydan sonra mesaj çıkar.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendWhen("LATER")}
+                    className={`rounded-xl border px-3 py-3 text-left ${sendWhen === "LATER" ? "border-blue-500 bg-blue-50/60" : "border-slate-200 bg-white hover:border-slate-300"}`}
+                  >
+                    <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <CalendarClock className="h-4 w-4 text-indigo-600" />
+                      Planlı gönder
+                    </span>
+                    <span className="mt-0.5 block text-xs text-slate-500">Seçtiğin tarih ve saatte çıkar.</span>
+                  </button>
+                </div>
+                {sendWhen === "LATER" && (
+                  <div className="mt-3">
+                    <Label className="mb-1.5 block text-sm font-medium text-slate-700">Gönderim zamanı</Label>
+                    <input
+                      type="datetime-local"
+                      className={selectClass}
+                      value={scheduledAt}
+                      onChange={(e) => setScheduledAt(e.target.value)}
+                    />
+                    {scheduledAt && !scheduleReady && (
+                      <p className="mt-2 text-xs text-amber-700">Gönderim zamanı gelecekte olmalı.</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="mt-6 flex justify-between">
               <Button variant="outline" className="h-10 rounded-xl px-5" onClick={() => setStep(2)}>Geri</Button>
@@ -1077,7 +1102,10 @@ export function SmsSendPage() {
               <SummaryRow label="Kategori" value={CAMPAIGN_CATEGORIES.find((item) => item.value === category)?.label || "—"} />
               <SummaryRow label="Gönderim türü" value={SEND_KINDS.find((item) => item.id === kind)?.title || "—"} />
               <SummaryRow label="Originatör" value={originators.find((item) => item.id === originatorId)?.name || "—"} />
-              <SummaryRow label="Zamanlama" value={kind === "SCHEDULED" ? (scheduledAt || "Planlı") : "Onay sonrası hemen"} />
+              <SummaryRow
+                label="Zamanlama"
+                value={sendWhen === "LATER" && scheduleDate ? scheduleDate.toLocaleString("tr-TR") : "Hemen gönder"}
+              />
               <SummaryRow label="Ham alıcı (tahmini)" value={String(rawCount)} />
               <SummaryRow label="SMS parça" value={String(parts)} />
               <SummaryRow label="SMS bakiyesi" value={smsBalance == null ? "…" : String(smsBalance)} />

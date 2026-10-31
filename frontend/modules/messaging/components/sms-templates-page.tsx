@@ -8,8 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { smsSendService, type SmsTemplateRecord } from "../services/sms-send.service";
 import { previewSmsTemplate, smsEncodingAndParts } from "../sms-text";
+import { contactCustomFieldsService } from "@/modules/contacts/services/custom-fields.service";
+import type { ContactCustomFieldRecord } from "@/modules/contacts/types";
 
-const VARIABLES = ["{firma}", "{yetkili}", "{ad}", "{soyad}", "{telefon}", "{email}"];
+const VARIABLES = ["{ad}", "{soyad}", "{firma}", "{yetkili}", "{telefon}", "{email}"];
 
 export function SmsTemplatesPage() {
   const [items, setItems] = useState<SmsTemplateRecord[]>([]);
@@ -19,6 +21,7 @@ export function SmsTemplatesPage() {
   const [body, setBody] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [customFields, setCustomFields] = useState<ContactCustomFieldRecord[]>([]);
 
   const load = async () => {
     const res = await smsSendService.templates();
@@ -29,6 +32,7 @@ export function SmsTemplatesPage() {
     void load()
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
+    void contactCustomFieldsService.list().then(setCustomFields).catch(() => setCustomFields([]));
   }, []);
 
   const resetForm = () => {
@@ -134,7 +138,7 @@ export function SmsTemplatesPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {VARIABLES.map((token) => (
+              {[...VARIABLES, ...customFields.filter((field) => field.isActive).map((field) => `{${field.name.trim()}}`)].map((token) => (
                 <button
                   key={token}
                   type="button"

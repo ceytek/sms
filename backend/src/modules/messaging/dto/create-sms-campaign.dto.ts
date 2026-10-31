@@ -78,6 +78,14 @@ export class CreateSmsCampaignDto {
   @IsDateString()
   scheduledAt?: string;
 
+  @IsOptional()
+  @IsUUID('4')
+  surveyId?: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  formId?: string;
+
   @IsArray()
   @ArrayNotEmpty()
   @ValidateNested({ each: true })

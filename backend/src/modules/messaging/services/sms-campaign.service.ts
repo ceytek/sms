@@ -94,6 +94,13 @@ export class SmsCampaignService {
     if ((dto.mode === 'SCHEDULE' || dto.composition === 'SCHEDULED') && (!scheduledAt || scheduledAt.getTime() <= Date.now())) {
       throw new BadRequestException('Planlanan zaman gelecekte olmalı');
     }
+    if (dto.surveyId) {
+      const [owned] = await this.dataSource.query(
+        `SELECT id FROM surveys WHERE id = $1 AND company_id = $2`,
+        [dto.surveyId, actor.companyId],
+      );
+      if (!owned) throw new BadRequestException('Anket bulunamadı');
+    }
     if (dto.composition === 'SINGLE') {
       const recipients = dto.sources.reduce(
         (sum, source) => sum + (source.phones?.length ?? 0) + (source.contactIds?.length ?? 0),
@@ -128,6 +135,8 @@ export class SmsCampaignService {
           smsAccountId: account?.id,
           isMock: !isSmsProviderLiveMode(),
           kvkkCheckEnabled,
+          surveyId: dto.surveyId,
+          formId: dto.formId,
           scheduledAt,
         }),
       );

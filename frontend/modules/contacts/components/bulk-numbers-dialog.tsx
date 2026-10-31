@@ -22,7 +22,7 @@ export function BulkNumbersDialog({
 }) {
   const [numbers, setNumbers] = useState("");
   const [job, setJob] = useState<ImportJobRecord | null>(null);
-  const [policy, setPolicy] = useState<ContactDuplicatePolicy>("SKIP");
+  const [policy, setPolicy] = useState<ContactDuplicatePolicy>("ADD_TO_GROUP");
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [newGroupName, setNewGroupName] = useState("");
   const [busy, setBusy] = useState(false);

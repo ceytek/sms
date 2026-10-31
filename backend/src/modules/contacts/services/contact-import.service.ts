@@ -161,7 +161,6 @@ export class ContactImportService {
       if (!row.normalized) continue;
 
       if (row.existingId) {
-        if (job.duplicatePolicy === ContactDuplicatePolicy.SKIP) continue;
         const existing = await this.contactRepository.findOne({ where: { id: row.existingId } });
         if (!existing) continue;
         if (job.duplicatePolicy === ContactDuplicatePolicy.UPDATE) {
@@ -179,9 +178,9 @@ export class ContactImportService {
           existing.updatedBy = actor.id;
           await this.contactRepository.save(existing);
         }
-        if (groupIds.length) await this.contactsService.addGroupMembers([existing.id], groupIds[0]);
-        for (const groupId of groupIds.slice(1)) {
-          await this.contactsService.addGroupMembers([existing.id], groupId);
+        let addedGroups = 0;
+        for (const groupId of groupIds) {
+          addedGroups += await this.contactsService.addGroupMembers([existing.id], groupId);
         }
         for (const tagId of tagIds) {
           await this.contactsService.addTagMembers([existing.id], tagId);
@@ -190,6 +189,20 @@ export class ContactImportService {
           const tag = await this.tagsService.findOrCreate(ownerCompanyId, row.tagName, actor.id);
           await this.contactsService.addTagMembers([existing.id], tag.id);
         }
+        if (addedGroups > 0 || job.duplicatePolicy === ContactDuplicatePolicy.UPDATE) {
+          row.errorType = undefined;
+          row.errorMessage = undefined;
+          successful += 1;
+          continue;
+        }
+        if (groupIds.length) {
+          row.errorType = ContactImportErrorType.DUPLICATE;
+          row.errorMessage = 'Bu grupta zaten var';
+          continue;
+        }
+        if (job.duplicatePolicy === ContactDuplicatePolicy.SKIP) continue;
+        row.errorType = undefined;
+        row.errorMessage = undefined;
         successful += 1;
         continue;
       }
@@ -223,6 +236,15 @@ export class ContactImportService {
       successful += 1;
     }
 
+    analysis.errors = analysis.errors.filter((err) => {
+      const row = analysis.rows.find((item) => item.rowNumber === err.rowNumber);
+      if (!row?.errorType) return false;
+      err.errorType = row.errorType;
+      err.errorMessage = row.errorMessage ?? err.errorMessage;
+      return true;
+    });
+    analysis.duplicate = analysis.rows.filter((row) => row.errorType === ContactImportErrorType.DUPLICATE).length;
+    analysis.existingCount = analysis.rows.filter((row) => row.errorType === ContactImportErrorType.EXISTS).length;
     await this.persistAnalysis(job, analysis);
     job.status = ContactImportStatus.COMPLETED;
     job.successfulRows = successful;

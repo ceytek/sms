@@ -62,7 +62,7 @@ export function ExcelImportDialog({
   const [job, setJob] = useState<ImportJobRecord | null>(null);
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [newGroupName, setNewGroupName] = useState("");
-  const [policy, setPolicy] = useState<ContactDuplicatePolicy>("SKIP");
+  const [policy, setPolicy] = useState<ContactDuplicatePolicy>("ADD_TO_GROUP");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const importProgress = useImportProgress();

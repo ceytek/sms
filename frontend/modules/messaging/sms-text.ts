@@ -1,16 +1,56 @@
 const GSM7 =
   '@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà';
+const GSM7_EXT = "^{}\\[~]|€";
+const TURKISH = /[çğıöşüÇĞİÖŞÜ]/u;
+const TURKISH_ASCII: Record<string, string> = {
+  ç: "c",
+  Ç: "C",
+  ğ: "g",
+  Ğ: "G",
+  ı: "i",
+  İ: "I",
+  ö: "o",
+  Ö: "O",
+  ş: "s",
+  Ş: "S",
+  ü: "u",
+  Ü: "U",
+};
+
+function isGsm7Char(char: string) {
+  return GSM7.includes(char) || GSM7_EXT.includes(char) || char === "\r" || char === "\n";
+}
+
+function usesUnicode(text: string) {
+  return [...text].some((char) => TURKISH.test(char) || !isGsm7Char(char));
+}
+
+function smsParts(length: number, single: number, concatenated: number) {
+  if (length <= single) return 1;
+  return Math.ceil(length / concatenated);
+}
 
 export function smsEncodingAndParts(body: string): { encoding: "GSM7" | "UCS2"; parts: number } {
   const text = body ?? "";
   if (!text) return { encoding: "GSM7", parts: 1 };
-  const gsm = [...text].every((char) => GSM7.includes(char) || char === "\r" || char === "\n");
-  if (gsm) {
-    const parts = text.length <= 160 ? 1 : Math.ceil(text.length / 153);
-    return { encoding: "GSM7", parts };
-  }
-  const parts = text.length <= 70 ? 1 : Math.ceil(text.length / 67);
-  return { encoding: "UCS2", parts };
+  if (usesUnicode(text)) return { encoding: "UCS2", parts: smsParts([...text].length, 70, 67) };
+  return { encoding: "GSM7", parts: smsParts([...text].length, 160, 153) };
+}
+
+export function analyzeSms(body: string) {
+  const text = body ?? "";
+  const info = smsEncodingAndParts(text);
+  const optimized = text.replace(TURKISH, (char) => TURKISH_ASCII[char] ?? char);
+  const optimizedInfo = optimized === text ? null : smsEncodingAndParts(optimized);
+  const saving = optimizedInfo && optimizedInfo.encoding === "GSM7" && optimizedInfo.parts < info.parts ? info.parts - optimizedInfo.parts : 0;
+  return {
+    length: [...text].length,
+    encoding: info.encoding,
+    parts: info.parts,
+    optimized: saving > 0 ? optimized : "",
+    optimizedParts: saving > 0 ? optimizedInfo?.parts ?? info.parts : info.parts,
+    saving,
+  };
 }
 
 export function previewSmsTemplate(template: string) {
@@ -47,17 +87,14 @@ export function renderSmsTemplate(
 }
 export function smsProgress(body: string) {
   const text = body ?? "";
+  const length = [...text].length;
   const { encoding, parts } = smsEncodingAndParts(text);
   if (encoding === "GSM7") {
-    if (text.length <= 160) {
-      return { encoding, parts, used: text.length, perPart: 160 };
-    }
-    const rem = text.length % 153;
+    if (length <= 160) return { encoding, parts, used: length, perPart: 160 };
+    const rem = length % 153;
     return { encoding, parts, used: rem === 0 ? 153 : rem, perPart: 153 };
   }
-  if (text.length <= 70) {
-    return { encoding, parts, used: text.length, perPart: 70 };
-  }
-  const rem = text.length % 67;
+  if (length <= 70) return { encoding, parts, used: length, perPart: 70 };
+  const rem = length % 67;
   return { encoding, parts, used: rem === 0 ? 67 : rem, perPart: 67 };
 }

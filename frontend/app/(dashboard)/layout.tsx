@@ -34,11 +34,14 @@ import {
   ListPlus,
   ShieldCheck,
   Share2,
+  ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HeaderCredits } from "@/modules/credits";
 import { HeaderInbox } from "@/modules/inbox";
 import { kvkkService } from "@/modules/kvkk";
+import { surveyService } from "@/modules/surveys";
+import { formService } from "@/modules/forms";
 
 interface NavItem {
   label: string;
@@ -61,6 +64,8 @@ export default function DashboardLayout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [kvkkEnabled, setKvkkEnabled] = useState(false);
+  const [surveyEnabled, setSurveyEnabled] = useState(false);
+  const [formEnabled, setFormEnabled] = useState(false);
   const [openMenus, setOpenMenus] = useState<string[]>([]);
 
   useEffect(() => {
@@ -77,8 +82,18 @@ export default function DashboardLayout({
         .status()
         .then((status) => setKvkkEnabled(status.enabled))
         .catch(() => setKvkkEnabled(false));
+      void surveyService
+        .status()
+        .then((status) => setSurveyEnabled(status.enabled))
+        .catch(() => setSurveyEnabled(false));
+      void formService
+        .status()
+        .then((status) => setFormEnabled(status.enabled))
+        .catch(() => setFormEnabled(false));
     } else {
       setKvkkEnabled(false);
+      setSurveyEnabled(false);
+      setFormEnabled(false);
     }
   }, [router, pathname]);
 
@@ -90,6 +105,8 @@ export default function DashboardLayout({
     const matched: string[] = [];
     if (pathname.startsWith("/customer/contacts")) matched.push("Rehber");
     if (pathname.startsWith("/customer/kvkk")) matched.push("KVKK / İzin Yönetimi");
+    if (pathname.startsWith("/customer/surveys")) matched.push("Anketler");
+    if (pathname.startsWith("/customer/forms")) matched.push("Formlar");
     if (pathname.startsWith("/customer/sms")) matched.push("SMS Gönderim Merkezi");
     if (pathname.startsWith("/admin/blocked-numbers")) matched.push("Yasaklı Numaralar");
     if (pathname.startsWith("/admin/originators")) matched.push("Originatör Yönetimi");
@@ -168,6 +185,16 @@ export default function DashboardLayout({
   const customerNavItems: NavItem[] = [
     { label: "Dashboard", href: "/customer", icon: <Home className="h-5 w-5" />, exact: true },
     {
+      label: "SMS Gönderim Merkezi",
+      href: "/customer/sms",
+      icon: <Send className="h-5 w-5" />,
+      children: [
+        { label: "SMS Gönderim", href: "/customer/sms", icon: <Send className="h-4 w-4" />, exact: true },
+        { label: "Şablonlar", href: "/customer/sms/templates", icon: <FileText className="h-4 w-4" /> },
+        { label: "Raporlar", href: "/customer/sms", icon: <BarChart3 className="h-4 w-4" />, exact: true },
+      ],
+    },
+    {
       label: "Rehber",
       href: "/customer/contacts",
       icon: <BookUser className="h-5 w-5" />,
@@ -181,6 +208,36 @@ export default function DashboardLayout({
         { label: "Aktarım Geçmişi", href: "/customer/contacts/imports", icon: <History className="h-4 w-4" /> },
       ],
     },
+    ...(surveyEnabled
+      ? [{
+          label: "Anketler",
+          href: "/customer/surveys",
+          icon: <ClipboardList className="h-5 w-5" />,
+          children: [
+            { label: "Dashboard", href: "/customer/surveys", icon: <Home className="h-4 w-4" />, exact: true },
+            { label: "Anketler", href: "/customer/surveys/list", icon: <ClipboardList className="h-4 w-4" /> },
+            { label: "Yanıtlar", href: "/customer/surveys/responses", icon: <FileText className="h-4 w-4" /> },
+            { label: "Şablonlar", href: "/customer/surveys/templates", icon: <FileText className="h-4 w-4" /> },
+            { label: "Raporlar", href: "/customer/surveys/reports", icon: <BarChart3 className="h-4 w-4" /> },
+            { label: "Ayarlar", href: "/customer/surveys/settings", icon: <FileText className="h-4 w-4" /> },
+          ],
+        } as NavItem]
+      : []),
+    ...(formEnabled
+      ? [{
+          label: "Formlar",
+          href: "/customer/forms",
+          icon: <FileText className="h-5 w-5" />,
+          children: [
+            { label: "Dashboard", href: "/customer/forms", icon: <Home className="h-4 w-4" />, exact: true },
+            { label: "Formlarım", href: "/customer/forms/list", icon: <ClipboardList className="h-4 w-4" /> },
+            { label: "Başvurular", href: "/customer/forms/submissions", icon: <FileText className="h-4 w-4" /> },
+            { label: "Şablonlar", href: "/customer/forms/templates", icon: <FileText className="h-4 w-4" /> },
+            { label: "Raporlar", href: "/customer/forms/reports", icon: <BarChart3 className="h-4 w-4" /> },
+            { label: "Ayarlar", href: "/customer/forms/settings", icon: <FileText className="h-4 w-4" /> },
+          ],
+        } as NavItem]
+      : []),
     ...(kvkkEnabled
       ? [{
           label: "KVKK / İzin Yönetimi",
@@ -197,16 +254,6 @@ export default function DashboardLayout({
           ],
         } as NavItem]
       : []),
-    {
-      label: "SMS Gönderim Merkezi",
-      href: "/customer/sms",
-      icon: <Send className="h-5 w-5" />,
-      children: [
-        { label: "SMS Gönderim", href: "/customer/sms", icon: <Send className="h-4 w-4" />, exact: true },
-        { label: "Şablonlar", href: "/customer/sms/templates", icon: <FileText className="h-4 w-4" /> },
-      ],
-    },
-    { label: "Raporlar", href: "/customer/sms", icon: <BarChart3 className="h-5 w-5" />, exact: true },
     { label: "Bakiye", href: "#", icon: <CreditCard className="h-5 w-5" />, disabled: true },
   ];
 
@@ -241,10 +288,10 @@ export default function DashboardLayout({
     const hasChildren = Boolean(item.children?.length);
     const isOpen = hasChildren && openMenus.includes(item.label);
     const baseClasses =
-      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors";
-    const activeClasses = "bg-slate-800 text-white";
-    const inactiveClasses = "text-slate-400 hover:bg-slate-800 hover:text-white";
-    const disabledClasses = "text-slate-600 cursor-not-allowed";
+      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors";
+    const activeClasses = "bg-indigo-50 text-indigo-700";
+    const inactiveClasses = "text-slate-600 hover:bg-slate-50 hover:text-slate-900";
+    const disabledClasses = "text-slate-300 cursor-not-allowed";
 
     const classes = `${baseClasses} ${
       item.disabled ? disabledClasses : active ? activeClasses : inactiveClasses
@@ -289,8 +336,8 @@ export default function DashboardLayout({
                 <Link
                   key={child.label}
                   href={child.href}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                    childActive ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
+                    childActive ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                   }`}
                 >
                   {child.label}
@@ -308,7 +355,7 @@ export default function DashboardLayout({
       {navItems.map(renderNavItem)}
       {placeholderItems.length > 0 && (
         <>
-          <div className="my-2 border-t border-slate-700" />
+          <div className="my-2 border-t border-slate-200" />
           {placeholderItems.map(renderNavItem)}
         </>
       )}
@@ -335,16 +382,16 @@ export default function DashboardLayout({
     <div className="flex min-h-0 flex-1">
       {/* Desktop Sidebar */}
       <aside
-        className={`hidden md:flex flex-col ${sidebarWidth} bg-slate-900 text-white transition-all duration-300 ease-in-out flex-shrink-0`}
+        className={`hidden md:flex flex-col ${sidebarWidth} border-r border-slate-200 bg-white text-slate-700 transition-all duration-300 ease-in-out flex-shrink-0`}
       >
         {/* Sidebar Header */}
-        <div className="flex h-16 items-center justify-between border-b border-slate-700 px-4">
+        <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
           {!collapsed && (
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500">
                 <Send className="h-4 w-4 text-white" />
               </div>
-              <span className="text-lg font-bold">Toplu SMS</span>
+              <span className="text-lg font-bold text-slate-900">Toplu SMS</span>
             </div>
           )}
           {collapsed && (
@@ -358,10 +405,10 @@ export default function DashboardLayout({
         <div className="flex-1 overflow-y-auto">{sidebarContent}</div>
 
         {/* Collapse Toggle */}
-        <div className="border-t border-slate-700 p-3">
+        <div className="border-t border-slate-200 p-3">
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors"
           >
             {collapsed ? (
               <ChevronRight className="h-5 w-5" />
@@ -382,17 +429,17 @@ export default function DashboardLayout({
             className="fixed inset-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="fixed inset-y-0 left-0 z-50 w-60 bg-slate-900 text-white flex flex-col">
-            <div className="flex h-16 items-center justify-between border-b border-slate-700 px-4">
+          <aside className="fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-slate-200 bg-white text-slate-700">
+            <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500">
                   <Send className="h-4 w-4 text-white" />
                 </div>
-                <span className="text-lg font-bold">Toplu SMS</span>
+                <span className="text-lg font-bold text-slate-900">Toplu SMS</span>
               </div>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-900"
               >
                 <X className="h-5 w-5" />
               </button>

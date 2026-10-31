@@ -43,7 +43,7 @@ export function ImportProgressOverlay({
   if (!mounted) return null;
 
   const imported = result?.successfulRows ?? 0;
-  const duplicate = (result?.duplicateRows ?? 0) + (result?.existingRows ?? 0);
+  const duplicate = result?.duplicateRows ?? 0;
   const broken = result?.failedRows ?? 0;
   const done = phase === "done" && result;
   const visible = phase !== "idle";
@@ -85,7 +85,7 @@ export function ImportProgressOverlay({
               {result.errors.slice(0, 30).map((item, index) => (
                 <div key={index} className="border-b border-slate-100 px-3 py-2 last:border-0">
                   {item.rowNumber ? `Satır ${item.rowNumber}: ` : ""}
-                  {ERROR_TYPE_LABELS[item.errorType ?? ""] ?? item.errorMessage}
+                  {item.errorMessage || ERROR_TYPE_LABELS[item.errorType ?? ""] || "Hata"}
                 </div>
               ))}
             </div>

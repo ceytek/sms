@@ -19,7 +19,9 @@ import { SmsCampaignSourceType } from '../../../common/enums/sms-campaign-source
 import { SmsExcludeReason } from '../../../common/enums/sms-exclude-reason.enum.js';
 import { SmsRecipientStatus } from '../../../common/enums/sms-recipient-status.enum.js';
 import { formatTrMobile, normalizeTrMobile } from '../../../common/phone/normalize-tr-mobile.js';
-import { hasPersonalization, renderSmsTemplate, smsEncodingAndParts } from '../sms-text.js';
+import { ContactCustomField } from '../../contacts/entities/contact-custom-field.entity.js';
+import { ContactCustomFieldType } from '../../../common/enums/contact-custom-field-type.enum.js';
+import { customTokenKey, hasPersonalization, renderSmsTemplate, smsEncodingAndParts } from '../sms-text.js';
 import { extractPhonesFromSpreadsheetBuffer } from '../sms-file-phones.js';
 import { CampaignStateService } from './campaign-state.service.js';
 import { readFile } from 'fs/promises';
@@ -35,6 +37,7 @@ type Incoming = {
   companyName?: string;
   email?: string;
   contactStatus?: ContactStatus;
+  customFields?: Record<string, string>;
 };
 
 const CHUNK = 400;
@@ -79,15 +82,24 @@ export class SmsPrepareService {
       await this.dataSource.getRepository(SmsCampaignSource).save(sources);
     }
     const seen = new Set<string>();
-    const personalized = hasPersonalization(campaign.body);
+    const customFieldDefs = await this.dataSource.getRepository(ContactCustomField).find({
+      where: { ownerCompanyId: campaign.senderCompanyId, isActive: true },
+      order: { sortOrder: 'ASC', createdAt: 'ASC' },
+    });
+    const personalized = hasPersonalization(
+      campaign.body,
+      customFieldDefs.map((field) => field.name),
+    );
 
     for (const source of sources) {
       for await (const incoming of this.iterateSource(campaign, source)) {
-        await this.ingestChunk(campaign, source, incoming, seen, personalized);
+        await this.ingestChunk(campaign, source, incoming, seen, personalized, customFieldDefs);
       }
     }
 
     await this.excludeRestrictedSendables(campaign);
+    await this.attachSurveyLinks(campaign);
+    await this.attachFormLinks(campaign);
     await this.state.reconcileCampaign(campaign.id);
     const ready = await this.state.markCampaign(
       campaign.id,
@@ -97,6 +109,135 @@ export class SmsPrepareService {
     );
     this.logger.log(`Prepared campaign ${campaign.id}`);
     return ready ?? (await campaignRepo.findOneByOrFail({ id: campaign.id }));
+  }
+
+  private async attachSurveyLinks(campaign: SmsCampaign) {
+    if (!campaign.surveyId) return;
+    await this.dataSource.query(
+      `INSERT INTO survey_recipients (
+         survey_id, company_id, contact_id, normalized_phone, display_name, token,
+         invite_status, sms_campaign_id, sms_recipient_id, created_at, updated_at
+       )
+       SELECT
+         $2, $3, r.contact_id, r.mobile_normalized, NULLIF(r.display_name, ''),
+         left(translate(encode(decode(md5(r.id::text || uuid_generate_v4()::text), 'hex'), 'base64'), '+/=', '-_'), 22),
+         'NOT_SENT', $1, r.id, now(), now()
+       FROM sms_campaign_recipients r
+       WHERE r.campaign_id = $1
+         AND r.status IN ('INCLUDED', 'QUEUED')
+         AND r.mobile_normalized IS NOT NULL
+         AND EXISTS (SELECT 1 FROM surveys s WHERE s.id = $2 AND s.company_id = $3)
+       ON CONFLICT (survey_id, normalized_phone) DO UPDATE SET
+         sms_campaign_id = EXCLUDED.sms_campaign_id,
+         sms_recipient_id = EXCLUDED.sms_recipient_id,
+         contact_id = COALESCE(survey_recipients.contact_id, EXCLUDED.contact_id),
+         display_name = COALESCE(survey_recipients.display_name, EXCLUDED.display_name),
+         updated_at = now()`,
+      [campaign.id, campaign.surveyId, campaign.senderCompanyId],
+    );
+    if (!/\{survey_link\}/i.test(campaign.body)) return;
+    const origin = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    let lastId = '00000000-0000-0000-0000-000000000000';
+    for (;;) {
+      const rows: { id: string; rendered_body: string; token: string }[] = await this.dataSource.query(
+        `SELECT r.id, COALESCE(r.rendered_body, '') AS rendered_body, sr.token
+         FROM sms_campaign_recipients r
+         JOIN survey_recipients sr ON sr.survey_id = $2 AND sr.normalized_phone = r.mobile_normalized
+         WHERE r.campaign_id = $1 AND r.id > $3 AND r.status IN ('INCLUDED', 'QUEUED')
+         ORDER BY r.id
+         LIMIT 400`,
+        [campaign.id, campaign.surveyId, lastId],
+      );
+      if (!rows.length) break;
+      const values: string[] = [];
+      const params: unknown[] = [];
+      rows.forEach((row, index) => {
+        const body = String(row.rendered_body || campaign.body).replace(/\{survey_link\}/gi, `${origin}/r/${row.token}`);
+        const meta = smsEncodingAndParts(body);
+        const base = index * 4;
+        values.push(`($${base + 1}::uuid, $${base + 2}, $${base + 3}, $${base + 4}::int)`);
+        params.push(row.id, body, meta.encoding, meta.parts);
+      });
+      await this.dataSource.query(
+        `UPDATE sms_campaign_recipients AS r
+         SET rendered_body = v.body, encoding = v.encoding, sms_parts = v.parts
+         FROM (VALUES ${values.join(',')}) AS v(id, body, encoding, parts)
+         WHERE r.id = v.id`,
+        params,
+      );
+      lastId = rows[rows.length - 1].id;
+      if (rows.length < 400) break;
+    }
+  }
+
+  private async attachFormLinks(campaign: SmsCampaign) {
+    if (!campaign.formId || !/\{form_link\}/i.test(campaign.body)) return;
+    const [form] = await this.dataSource.query(
+      `SELECT personalized, public_slug FROM forms WHERE id = $1 AND company_id = $2`,
+      [campaign.formId, campaign.senderCompanyId],
+    );
+    if (!form) return;
+    const origin = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    if (!form.personalized) {
+      if (!form.public_slug) return;
+      const link = `${origin}/f/${form.public_slug}`;
+      await this.dataSource.query(
+        `UPDATE sms_campaign_recipients
+         SET rendered_body = replace(COALESCE(NULLIF(rendered_body, ''), $2), '{form_link}', $3)
+         WHERE campaign_id = $1 AND status IN ('INCLUDED', 'QUEUED')`,
+        [campaign.id, campaign.body, link],
+      );
+      return;
+    }
+    await this.dataSource.query(
+      `INSERT INTO form_recipients (
+         form_id, company_id, name, phone, normalized_phone, token, invite_status, sms_recipient_id, created_at
+       )
+       SELECT
+         $2, $3, NULLIF(r.display_name, ''), r.mobile_normalized, r.mobile_normalized,
+         left(translate(encode(decode(md5(r.id::text || uuid_generate_v4()::text), 'hex'), 'base64'), '+/=', '-_'), 22),
+         'PENDING', r.id, now()
+       FROM sms_campaign_recipients r
+       WHERE r.campaign_id = $1
+         AND r.status IN ('INCLUDED', 'QUEUED')
+         AND r.mobile_normalized IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM form_recipients fr
+           WHERE fr.form_id = $2 AND fr.normalized_phone = r.mobile_normalized
+         )`,
+      [campaign.id, campaign.formId, campaign.senderCompanyId],
+    );
+    let lastId = '00000000-0000-0000-0000-000000000000';
+    for (;;) {
+      const rows: { id: string; rendered_body: string; token: string }[] = await this.dataSource.query(
+        `SELECT r.id, COALESCE(r.rendered_body, '') AS rendered_body, fr.token
+         FROM sms_campaign_recipients r
+         JOIN form_recipients fr ON fr.form_id = $2 AND fr.normalized_phone = r.mobile_normalized
+         WHERE r.campaign_id = $1 AND r.id > $3 AND r.status IN ('INCLUDED', 'QUEUED')
+         ORDER BY r.id
+         LIMIT 400`,
+        [campaign.id, campaign.formId, lastId],
+      );
+      if (!rows.length) break;
+      const values: string[] = [];
+      const params: unknown[] = [];
+      rows.forEach((row, index) => {
+        const body = String(row.rendered_body || campaign.body).replace(/\{form_link\}/gi, `${origin}/fr/${row.token}`);
+        const meta = smsEncodingAndParts(body);
+        const base = index * 4;
+        values.push(`($${base + 1}::uuid, $${base + 2}, $${base + 3}, $${base + 4}::int)`);
+        params.push(row.id, body, meta.encoding, meta.parts);
+      });
+      await this.dataSource.query(
+        `UPDATE sms_campaign_recipients AS r
+         SET rendered_body = v.body, encoding = v.encoding, sms_parts = v.parts
+         FROM (VALUES ${values.join(',')}) AS v(id, body, encoding, parts)
+         WHERE r.id = v.id`,
+        params,
+      );
+      lastId = rows[rows.length - 1].id;
+      if (rows.length < 400) break;
+    }
   }
 
   private async *iterateSource(campaign: SmsCampaign, source: SmsCampaignSource): AsyncGenerator<Incoming[]> {
@@ -166,6 +307,7 @@ export class SmsPrepareService {
           companyName: row.companyName,
           email: row.email,
           contactStatus: row.status,
+          customFields: row.customFields,
         }));
       if (rows.length < CHUNK) break;
     }
@@ -234,6 +376,7 @@ export class SmsPrepareService {
     incoming: Incoming[],
     seen: Set<string>,
     personalized: boolean,
+    customFieldDefs: ContactCustomField[] = [],
   ) {
     if (!incoming.length) return;
     const normalizedList = incoming
@@ -256,7 +399,7 @@ export class SmsPrepareService {
     const book = normalizedList.length
       ? await this.dataSource.getRepository(Contact).find({
           where: { ownerCompanyId: campaign.senderCompanyId, normalizedPhone: In(normalizedList) },
-          select: ['id', 'normalizedPhone', 'firstName', 'lastName', 'companyName', 'status'],
+          select: ['id', 'normalizedPhone', 'firstName', 'lastName', 'companyName', 'status', 'customFields'],
         })
       : [];
     const contactByPhone = new Map(book.map((row) => [row.normalizedPhone, row]));
@@ -273,9 +416,18 @@ export class SmsPrepareService {
             lastName: item.lastName || found.lastName,
             companyName: item.companyName || found.companyName,
             contactStatus: item.contactStatus ?? found.status,
+            customFields: item.customFields ?? found.customFields,
           }
         : item;
-      const classified = this.classify(campaign, linked, seen, restrictionMap, approvedSet, personalized);
+      const classified = this.classify(
+        campaign,
+        linked,
+        seen,
+        restrictionMap,
+        approvedSet,
+        personalized,
+        customFieldDefs,
+      );
       entities.push(
         this.dataSource.getRepository(SmsCampaignRecipient).create({
           campaignId: campaign.id,
@@ -406,6 +558,7 @@ export class SmsPrepareService {
     restrictionMap: Map<string, 'BLACKLIST' | 'SMS_BLOCKED'>,
     approvedSet: Set<string>,
     personalized: boolean,
+    customFieldDefs: ContactCustomField[] = [],
   ): Partial<SmsCampaignRecipient> {
     const raw = item.raw?.trim() || '';
     const normalized = normalizeTrMobile(raw);
@@ -416,6 +569,7 @@ export class SmsPrepareService {
           companyName: item.companyName,
           phone: normalized ?? raw,
           email: item.email,
+          custom: customValues(customFieldDefs, item.customFields),
         })
       : campaign.body;
     const { encoding, parts } = smsEncodingAndParts(rendered);
@@ -465,4 +619,22 @@ export class SmsPrepareService {
     seen.add(normalized);
     return { ...base, status: SmsRecipientStatus.INCLUDED };
   }
+}
+
+function customValues(fields: ContactCustomField[], values?: Record<string, string>) {
+  const mapped: Record<string, string> = {};
+  for (const field of fields) {
+    mapped[customTokenKey(field.name)] = displayCustomValue(field, values?.[field.id]);
+  }
+  return mapped;
+}
+
+function displayCustomValue(field: ContactCustomField, raw?: string) {
+  const value = String(raw ?? '').trim();
+  if (!value) return '';
+  if (field.fieldType === ContactCustomFieldType.DATE && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const [year, month, day] = value.slice(0, 10).split('-');
+    return `${day}.${month}.${year}`;
+  }
+  return value;
 }

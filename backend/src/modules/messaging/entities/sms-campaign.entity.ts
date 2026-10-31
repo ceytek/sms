@@ -98,6 +98,12 @@ export class SmsCampaign {
   @Column({ name: 'kvkk_check_enabled', default: false })
   kvkkCheckEnabled: boolean;
 
+  @Column({ name: 'survey_id', type: 'uuid', nullable: true })
+  surveyId?: string;
+
+  @Column({ name: 'form_id', type: 'uuid', nullable: true })
+  formId?: string;
+
   @Column({ name: 'company_count', type: 'int', default: 0 })
   companyCount: number;
 

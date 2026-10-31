@@ -17,12 +17,13 @@ function ImpersonateBootstrap() {
     }
 
     const session = authService.completeImpersonationHandoff(key);
-    if (!session) {
+    const user = session?.user ?? (authService.isImpersonating() ? authService.getUser() : null);
+    if (!user) {
       setError("Oturum süresi doldu. Lütfen listeden tekrar giriş yapın.");
       return;
     }
 
-    const target = session.user.role === "CUSTOMER" ? "/customer" : "/admin";
+    const target = user.role === "CUSTOMER" ? "/customer" : "/admin";
     window.location.replace(target);
   }, [searchParams]);
 

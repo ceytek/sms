@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { humanizeValidationMessages } from '../validation-message.js';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -22,10 +23,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
+    const body =
+      exception instanceof HttpException ? exception.getResponse() : 'Beklenmeyen bir hata oluştu. Tekrar deneyin.';
+    const extracted = typeof body === 'string' ? body : (body as { message?: unknown }).message || body;
     const message =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : 'Internal server error';
+      status >= 500
+        ? 'Beklenmeyen bir hata oluştu. Tekrar deneyin.'
+        : status === 400
+          ? humanizeValidationMessages(extracted)
+          : typeof extracted === 'string'
+            ? extracted
+            : humanizeValidationMessages(extracted);
 
     this.logger.error(
       `${request.method} ${request.url} - ${status}`,
@@ -36,7 +44,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
-      message: typeof message === 'string' ? message : (message as any).message || message,
+      message,
     });
   }
 }

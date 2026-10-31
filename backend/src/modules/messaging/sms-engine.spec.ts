@@ -21,6 +21,22 @@ describe('smsEncodingAndParts', () => {
     expect(result.encoding).toBe('UCS2');
     expect(result.parts).toBe(1);
   });
+
+  it('counts o-umlaut as Turkish unicode', () => {
+    expect(smsEncodingAndParts('ö').encoding).toBe('UCS2');
+  });
+
+  it('keeps an English survey link on GSM-7', () => {
+    expect(smsEncodingAndParts('Hello {survey_link}')).toEqual({ encoding: 'GSM7', parts: 1 });
+  });
+
+  it('splits GSM-7 after 160 into 153-character parts', () => {
+    expect(smsEncodingAndParts('a'.repeat(161)).parts).toBe(2);
+  });
+
+  it('splits unicode after 70 into 67-character parts', () => {
+    expect(smsEncodingAndParts(`ş${'a'.repeat(70)}`).parts).toBe(2);
+  });
 });
 
 describe('personalization', () => {
@@ -29,6 +45,12 @@ describe('personalization', () => {
     expect(renderSmsTemplate('Sayın {yetkili}', { firstName: 'Ali', lastName: 'Kaya' })).toBe(
       'Sayın Ali Kaya',
     );
+    expect(hasPersonalization('Doğum günün kutlu olsun {Doğum Günü}', ['Doğum Günü'])).toBe(true);
+    expect(
+      renderSmsTemplate('Doğum günün {doğum günü}', {
+        custom: { 'doğum günü': '30.09.1990' },
+      }),
+    ).toBe('Doğum günün 30.09.1990');
   });
 });
 

@@ -148,6 +148,9 @@ function ServiceTermRow({ service }: { service: CompanyServiceAssignment }) {
   if (service.serviceCode === "KVKK" && service.isActive && !expired) {
     return <Link href="/customer/kvkk" className="block">{row}</Link>;
   }
+  if (service.serviceCode === "SURVEY" && service.isActive && !expired) {
+    return <Link href="/customer/surveys" className="block">{row}</Link>;
+  }
   return row;
 }
 

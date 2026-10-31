@@ -114,6 +114,15 @@ export class CompaniesController {
     return this.companiesService.setServiceActive(id, serviceId, dto.isActive, user.id);
   }
 
+  @Post(':id/services/:serviceId/renew')
+  renewService(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.companiesService.renewService(id, serviceId, user.id);
+  }
+
   @Post(':id/contacts')
   addContact(
     @Param('id', ParseUUIDPipe) id: string,

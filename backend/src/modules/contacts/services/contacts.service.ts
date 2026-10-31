@@ -394,10 +394,11 @@ export class ContactsService {
     });
     const have = new Set(existing.map((item) => item.contactId));
     const missing = contactIds.filter((id) => !have.has(id));
-    if (!missing.length) return;
+    if (!missing.length) return 0;
     await this.groupMemberRepository.save(
       missing.map((contactId) => this.groupMemberRepository.create({ contactId, groupId })),
     );
+    return missing.length;
   }
 
   async addTagMembers(contactIds: string[], tagId: string) {
