@@ -179,5 +179,3 @@ function renderInput(
   if (type === "FILE_UPLOAD") return <input type="file" onChange={(e) => onChange(e.target.files?.[0]?.name || "")} className={cls} />;
   return <input type="text" value={text} onChange={(e) => onChange(e.target.value)} className={cls} placeholder={field.placeholder} />;
 }
-
-type PublicForm = NonNullable<Awaited<ReturnType<typeof formService.publicBySlug>>>;
